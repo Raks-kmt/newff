@@ -289,7 +289,7 @@ def cmd_clean(message):
 # VISUAL BACKGROUND PREVIEW HANDLER
 # -------------------------------------------------------------
 
-def send_or_update_bg_preview(chat_id, bg_key):
+def send_or_update_bg_preview(chat_id, bg_key, message_id=None, is_edit=False):
     session = get_user_session(chat_id)
     keys = list(renderer.GRADIENT_PRESETS.keys())
     if bg_key not in keys:
@@ -321,14 +321,6 @@ def send_or_update_bg_preview(chat_id, bg_key):
         types.InlineKeyboardButton("🗑️ Close Preview", callback_data="close:bg_preview")
     )
     
-    # Auto-delete previous preview photo in chat if open
-    if session.get('last_bg_preview_msg_id'):
-        try:
-            bot.delete_message(chat_id, session['last_bg_preview_msg_id'])
-        except Exception:
-            pass
-        session['last_bg_preview_msg_id'] = None
-
     preview_file = ASSETS_DIR / f"{bg_key}.jpg"
     
     # If preview image does not exist yet, generate it on the fly!
@@ -338,6 +330,26 @@ def send_or_update_bg_preview(chat_id, bg_key):
             img.save(preview_file, quality=88)
         except Exception:
             pass
+
+    target_msg_id = message_id or session.get('last_bg_preview_msg_id')
+    
+    # If is_edit is True, update the photo and text IN-PLACE without deleting!
+    if is_edit and target_msg_id and preview_file.exists():
+        try:
+            with open(preview_file, 'rb') as f:
+                media = types.InputMediaPhoto(f, caption=caption, parse_mode='Markdown')
+                bot.edit_message_media(media, chat_id=chat_id, message_id=target_msg_id, reply_markup=kb)
+                return
+        except Exception as edit_err:
+            print(f"[BG EDIT MEDIA NOTICE]: {edit_err}")
+
+    # If first time opening preview, clean old one if any and send fresh photo
+    if session.get('last_bg_preview_msg_id'):
+        try:
+            bot.delete_message(chat_id, session['last_bg_preview_msg_id'])
+        except Exception:
+            pass
+        session['last_bg_preview_msg_id'] = None
 
     try:
         if preview_file.exists():
@@ -538,23 +550,21 @@ def handle_callbacks(call):
 
     if data.startswith('view:bg:'):
         bg = data.replace('view:bg:', '')
-        send_or_update_bg_preview(chat_id, bg)
+        is_photo = (call.message.content_type == 'photo') or (session.get('last_bg_preview_msg_id') == message_id)
+        send_or_update_bg_preview(chat_id, bg, message_id=message_id, is_edit=is_photo)
         return bot.answer_callback_query(call.id, text=f"Previewing {bg}")
 
     if data.startswith('apply:bg:'):
         bg = data.replace('apply:bg:', '')
         session['bg_gradient'] = bg
         save_sessions()
+        bg_name = renderer.BG_PRESETS_LABELS.get(bg, bg)
         
-        if session.get('last_bg_preview_msg_id'):
-            try: bot.delete_message(chat_id, session['last_bg_preview_msg_id'])
-            except Exception: pass
-            session['last_bg_preview_msg_id'] = None
-            save_sessions()
+        is_photo = (call.message.content_type == 'photo') or (session.get('last_bg_preview_msg_id') == message_id)
+        if is_photo:
+            send_or_update_bg_preview(chat_id, bg, message_id=message_id, is_edit=True)
             
-        conf = bot.send_message(chat_id, f"✅ *Background Updated!* Active: `{renderer.BG_PRESETS_LABELS.get(bg, bg)}`")
-        threading.Timer(3.5, lambda: (bot.delete_message(chat_id, conf.message_id) if conf else None)).start()
-        return bot.answer_callback_query(call.id, text=f"Applied: {bg}")
+        return bot.answer_callback_query(call.id, text=f"✅ Active: {bg_name}")
 
     if data == 'close:bg_preview':
         if session.get('last_bg_preview_msg_id'):
