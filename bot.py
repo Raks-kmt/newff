@@ -1,6 +1,6 @@
 """
-STOP CHALLENGE TELEGRAM BOT (100% PYTHON SERVER ENGINE)
-High-Performance 60 FPS Video Studio for Stop/Pause Challenges.
+🛑 STOP CHALLENGE PRO — TELEGRAM VIDEO STUDIO
+High-Performance 60 FPS Video Render Engine with Live Progress Tracking.
 Direct FFmpeg piping, zero browser overhead, instant Telegram delivery,
 automatic server cache cleanup post-delivery.
 """
@@ -132,6 +132,9 @@ def get_user_session(chat_id):
 # UI LABELS & HELPERS
 # -------------------------------------------------------------
 
+BOT_BRAND = "Stop Challenge Pro"
+BOT_TAG = "#StopChallenge #Reels #Shorts #60FPS"
+
 def get_png_scale_label(percent):
     p = percent or 100
     if p <= 55: return 'Very Small 🔬'
@@ -160,6 +163,122 @@ def get_clean_header(text):
         else:
             clean += " "
     return " ".join(clean.split())
+
+def fmt_time(seconds):
+    """Format seconds to mm:ss or 'Xs' for short durations."""
+    if seconds < 0:
+        return '..'
+    if seconds < 60:
+        return f"{int(seconds)}s"
+    m = int(seconds // 60)
+    s = int(seconds % 60)
+    return f"{m}m {s:02d}s"
+
+def make_progress_bar(pct, width=20):
+    """Create an animated Unicode progress bar."""
+    filled = int(pct / 100 * width)
+    bar = '█' * filled + '░' * (width - filled)
+    return bar
+
+# -------------------------------------------------------------
+# LIVE PROGRESS TRACKER (Professional Real-Time Updates)
+# -------------------------------------------------------------
+
+class LiveProgressTracker:
+    """
+    Manages live Telegram message updates during rendering.
+    Throttled to max 1 edit per 2 seconds to avoid Telegram rate limits.
+    Shows: animated progress bar, %, ETA, speed, stage, and config info.
+    """
+    def __init__(self, bot_instance, chat_id, message_id, item_name, session, total_stages=6):
+        self.bot = bot_instance
+        self.chat_id = chat_id
+        self.msg_id = message_id
+        self.item_name = item_name
+        self.session = session
+        self.total_stages = total_stages
+        self.stage = 1
+        self.stage_label = '📥 Downloading'
+        self.start_time = time.time()
+        self.last_edit_time = 0
+        self.last_pct = -1
+        self.render_start = None
+        self._lock = threading.Lock()
+
+    def set_stage(self, stage_num, label):
+        """Update current stage (1=Download, 2=Process, 3=Render, 4=Mux, 5=Upload, 6=Done)."""
+        self.stage = stage_num
+        self.stage_label = label
+        if stage_num == 3:
+            self.render_start = time.time()
+        self._do_edit(force=True)
+
+    def on_render_progress(self, pct, cur_frame, total_frames):
+        """Called from renderer's on_progress callback."""
+        if pct == self.last_pct:
+            return
+        self.last_pct = pct
+        now = time.time()
+        # Throttle: max 1 edit per 2s, but always send 100%
+        if pct < 100 and (now - self.last_edit_time) < 2.0:
+            return
+        
+        elapsed = now - (self.render_start or self.start_time)
+        if pct > 0:
+            eta = (elapsed / pct) * (100 - pct)
+        else:
+            eta = 0
+        fps_actual = cur_frame / max(0.1, elapsed)
+
+        bar = make_progress_bar(pct)
+        stage_dots = ''.join(['●' if i < self.stage else '○' for i in range(self.total_stages)])
+
+        text = (
+            f"🎬 *{BOT_BRAND} — Rendering*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"📁 *Item*: `{self.item_name}`\n\n"
+            f"`[{bar}]` *{pct}%*\n\n"
+            f"⏱️ *Elapsed*: `{fmt_time(elapsed)}`  •  🏁 *ETA*: `{fmt_time(eta)}`\n"
+            f"⚡ *Speed*: `{fps_actual:.0f} fps`  •  🎞️ `{cur_frame}/{total_frames}` frames\n\n"
+            f"📊 *Stage*: {self.stage_label}  `[{stage_dots}]`\n"
+            f"🎨 `{self.session.get('bg_gradient', 'cyberpunk')}` • "
+            f"📐 `{self.session.get('png_scale', 100)}%` • "
+            f"📺 `{self.session.get('resolution', '720p').upper()}`"
+        )
+        self._send(text)
+
+    def _do_edit(self, force=False):
+        now = time.time()
+        if not force and (now - self.last_edit_time) < 2.0:
+            return
+        elapsed = now - self.start_time
+        stage_dots = ''.join(['●' if i < self.stage else '○' for i in range(self.total_stages)])
+        text = (
+            f"🎬 *{BOT_BRAND} — Processing*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"📁 *Item*: `{self.item_name}`\n\n"
+            f"📊 *Stage*: {self.stage_label}  `[{stage_dots}]`\n"
+            f"⏱️ *Elapsed*: `{fmt_time(elapsed)}`\n\n"
+            f"🎨 `{self.session.get('bg_gradient', 'cyberpunk')}` • "
+            f"📐 `{self.session.get('png_scale', 100)}%` • "
+            f"📺 `{self.session.get('resolution', '720p').upper()}`"
+        )
+        self._send(text)
+
+    def _send(self, text):
+        with self._lock:
+            now = time.time()
+            if (now - self.last_edit_time) < 1.5:
+                return
+            try:
+                self.bot.edit_message_text(
+                    text,
+                    chat_id=self.chat_id,
+                    message_id=self.msg_id
+                )
+                self.last_edit_time = time.time()
+            except Exception:
+                pass
 
 # -------------------------------------------------------------
 # AUTOMATIC SERVER CLEANUP JANITOR
@@ -246,15 +365,18 @@ def get_settings_keyboard(session):
     return kb
 
 def get_settings_summary_text(session):
+    pool_count = len(session.get('custom_audio_files', []))
+    audio_info = f"Random Pool ({pool_count} tracks)" if pool_count > 0 else session.get('audio_preset', 'none')
     return (
-        "⚙️ *Stop Challenge 4K 60FPS Studio*\n\n"
-        f"• 🎬 *Motion*: `{session.get('motion_type', 'spin').upper()}` (`{session.get('speed', 1.0)}x`)\n"
-        f"• 📐 *Object Scale*: `{session.get('png_scale', 100)}%` ({get_png_scale_label(session.get('png_scale', 100))})\n"
-        f"• 🎨 *Background*: `{renderer.BG_PRESETS_LABELS.get(session.get('bg_gradient', 'cyberpunk'), 'Cyberpunk')}`\n"
-        f"• ✨ *Particles*: `{'ON' if session.get('show_sparkles', True) else 'OFF'}` (`{session.get('particle_count', 90)} pts`)\n"
-        f"• 🎵 *Soundtrack*: `{session.get('audio_preset', 'random_pool')}`\n"
-        f"• 📺 *Specs*: `60 FPS` • `{session.get('resolution', '720p').upper()}` • `{session.get('aspect_ratio', '9:16')}`\n\n"
-        "💡 _Click any setting below to customize, or send photos/ZIP to render instantly!_"
+        f"⚙️ *{BOT_BRAND} — Control Panel*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🎬 *Motion*: `{session.get('motion_type', 'spin').upper()}` at `{session.get('speed', 1.0)}x`\n"
+        f"📐 *Scale*: `{session.get('png_scale', 100)}%` ({get_png_scale_label(session.get('png_scale', 100))})\n"
+        f"🎨 *Background*: `{renderer.BG_PRESETS_LABELS.get(session.get('bg_gradient', 'cyberpunk'), 'Cyberpunk')}`\n"
+        f"✨ *Particles*: `{'ON' if session.get('show_sparkles', True) else 'OFF'}` (`{session.get('particle_count', 90)} pts`)\n"
+        f"🎵 *Audio*: `{audio_info}`\n"
+        f"📺 *Output*: `60 FPS` • `{session.get('resolution', '720p').upper()}` • `{session.get('aspect_ratio', '9:16')}`\n\n"
+        f"💡 _Tap any button to customize, or send a photo/ZIP to render!_"
     )
 
 # -------------------------------------------------------------
@@ -267,13 +389,19 @@ def cmd_start(message):
     session = get_user_session(chat_id)
     
     welcome_text = (
-        "🚀 *Welcome to Stop Challenge 4K 60FPS Studio!* 🛑\n\n"
-        "Create viral, ultra-smooth **Stop/Pause Challenge Videos** in seconds:\n\n"
-        "✨ *How it Works*:\n"
-        "1️⃣ Send a **Transparent PNG** (or any photo) for an instant 60 FPS video.\n"
-        "2️⃣ Send a **ZIP Archive** with multiple PNGs to batch-render videos!\n"
-        "3️⃣ Send an **Audio File (MP3)** to use as background music.\n\n"
-        "⚡ _100% Cloud-Powered • Zero Load on Your Phone/PC • Auto-Clean Storage_"
+        f"🛑 *{BOT_BRAND}*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"Create viral, ultra-smooth *Stop/Pause Challenge* videos in seconds!\n\n"
+        f"📸 *Send Photo* → Instant 60 FPS video\n"
+        f"📦 *Send ZIP* → Batch render multiple videos\n"
+        f"🎵 *Send MP3* → Custom background music\n\n"
+        f"⚡ *Features*:\n"
+        f"  • 🎬 8 Motion styles (Spin, Bounce, Spiral...)\n"
+        f"  • 🎨 20 Premium studio backgrounds\n"
+        f"  • ✨ 3D floating particle effects\n"
+        f"  • 📊 Live progress tracking\n"
+        f"  • 🧹 Auto server cleanup\n\n"
+        f"☁️ _100% Cloud • Zero load on device • {BOT_TAG}_"
     )
     bot.send_message(
         chat_id,
@@ -294,13 +422,17 @@ def cmd_settings(message):
 @bot.message_handler(commands=['status'])
 def cmd_status(message):
     chat_id = message.chat.id
+    uptime = time.time() - BOT_START_TIME
     status_text = (
-        "🟢 *Studio Cloud Status*: **Online & Ready**\n\n"
-        f"• ⚡ *Engine*: `Python 3.12 + Pillow + FFmpeg (60 FPS Native)`\n"
-        f"• 🖥️ *Platform*: `{sys.platform.upper()}`\n"
-        f"• 🧹 *Auto-Clean*: `Active (Immediate Post-Delivery)`\n"
-        f"• 📁 *Storage*: `Zero Cache Bloat`\n"
-        f"• 🚀 *Cloud Health*: `100% Operational`"
+        f"🟢 *{BOT_BRAND} — System Status*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"⚡ *Engine*: `Python 3.12 + Pillow + FFmpeg`\n"
+        f"🎞️ *Output*: `60 FPS Native Pipeline`\n"
+        f"🖥️ *Platform*: `{sys.platform.upper()}`\n"
+        f"⏱️ *Uptime*: `{fmt_time(uptime)}`\n"
+        f"🧹 *Auto-Clean*: `Active (5 min cycle)`\n"
+        f"📁 *Storage*: `Zero Bloat`\n"
+        f"🚀 *Health*: `100% Operational`"
     )
     bot.send_message(chat_id, status_text)
 
@@ -747,14 +879,21 @@ def handle_single_image(chat_id, file_id, original_name="ChallengeItem"):
     
     status_msg = bot.send_message(
         chat_id,
-        f"⏳ *Initializing 60 FPS Render for \"{clean_name}\"...*\n🚀 _Starting Python Video Pipeline..._"
+        f"🎬 *{BOT_BRAND} — Starting*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📁 *Item*: `{clean_name}`\n\n"
+        f"📊 *Stage*: 📥 Downloading  `[●○○○○○]`\n"
+        f"⏱️ *Elapsed*: `0s`"
     )
+
+    tracker = LiveProgressTracker(bot, chat_id, status_msg.message_id, clean_name, session)
 
     temp_image_path = TEMP_DIR / f"{chat_id}_{int(time.time())}_{original_name}"
     rendered_video_path = EXPORTS_DIR / f"challenge_{clean_name}_{session.get('resolution', '720p').upper()}_{int(time.time())}.mp4"
 
     try:
-        # 1. Download file from Telegram
+        # Stage 1: Download
+        tracker.set_stage(1, '📥 Downloading')
         file_info = bot.get_file(file_id)
         downloaded = bot.download_file(file_info.file_path)
         with open(temp_image_path, 'wb') as f:
@@ -762,7 +901,10 @@ def handle_single_image(chat_id, file_id, original_name="ChallengeItem"):
 
         img = Image.open(temp_image_path)
 
-        # 2. Audio selection & duration auto-match
+        # Stage 2: Processing
+        tracker.set_stage(2, '🔧 Processing Image')
+
+        # Audio selection & duration auto-match
         chosen_audio = None
         pool = session.get('custom_audio_files') or []
         single_custom = session.get('custom_audio_file')
@@ -783,20 +925,8 @@ def handle_single_image(chat_id, file_id, original_name="ChallengeItem"):
                 video_duration = det_dur
                 print(f"[BOT] Video duration matched to audio track: {video_duration}s")
 
-        # 3. Render 60 FPS Video
-        def on_prog(pct, cur, total):
-            if pct % 25 == 0 or pct == 100:
-                try:
-                    bot.edit_message_text(
-                        f"🎬 *Rendering 60 FPS Video* • `{clean_name}`\n\n"
-                        f"📊 Progress: `[{'█' * (pct // 10)}{'░' * (10 - pct // 10)}]` **{pct}%**\n"
-                        f"⏱️ Frames: `{cur} / {total}` @ `60 FPS`\n"
-                        f"🎨 `{session.get('bg_gradient', 'cyberpunk')}` • 📐 `{session.get('png_scale', 100)}%`",
-                        chat_id=chat_id,
-                        message_id=status_msg.message_id
-                    )
-                except Exception:
-                    pass
+        # Stage 3: Render
+        tracker.set_stage(3, '🎬 Rendering 60 FPS')
 
         config = {
             'image': img,
@@ -822,18 +952,28 @@ def handle_single_image(chat_id, file_id, original_name="ChallengeItem"):
             'output_path': str(rendered_video_path)
         }
 
-        result = renderer.render_stop_challenge_video(config, on_progress=on_prog)
+        result = renderer.render_stop_challenge_video(config, on_progress=tracker.on_render_progress)
 
-        # 4. Upload Video to Telegram
+        # Stage 4: Muxing
+        tracker.set_stage(4, '🔊 Muxing Audio')
+
+        # Stage 5: Uploading
+        tracker.set_stage(5, '📤 Uploading to Telegram')
+
         size_mb = os.path.getsize(rendered_video_path) / (1024 * 1024)
+        total_time = time.time() - tracker.start_time
+
         caption = (
-            f"🎬 *Video Ready!* ⚡\n"
-            f"🛑 *\"{session.get('header_text')}\"*\n\n"
-            f"📁 `{result['filename']}` • `{size_mb:.1f} MB`\n"
-            f"⏱️ `{result['duration']}s` @ `60 FPS` • `{session.get('resolution', '720p').upper()}`\n"
-            f"🎨 `{session.get('bg_gradient', 'cyberpunk')}` • 📐 `{session.get('png_scale', 100)}%`\n"
-            f"🎵 `{'Random Pool' if chosen_audio else 'None (Silent)'}`\n\n"
-            f"🔥 #StopChallenge #Reels #Shorts #60FPS"
+            f"✅ *{BOT_BRAND} — Video Ready!*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"📁 *File*: `{result['filename']}`\n"
+            f"📦 *Size*: `{size_mb:.1f} MB`\n"
+            f"⏱️ *Duration*: `{result['duration']}s` @ `60 FPS`\n"
+            f"📺 *Resolution*: `{session.get('resolution', '720p').upper()}` • `{session.get('aspect_ratio', '9:16')}`\n"
+            f"🎨 *Background*: `{renderer.BG_PRESETS_LABELS.get(session.get('bg_gradient', 'cyberpunk'), 'cyberpunk')}`\n"
+            f"🎵 *Audio*: `{'Attached ✅' if chosen_audio else 'Silent'}`\n"
+            f"⚡ *Rendered in*: `{fmt_time(total_time)}`\n\n"
+            f"🔥 {BOT_TAG}"
         )
 
         with open(rendered_video_path, 'rb') as video_file:
@@ -845,6 +985,7 @@ def handle_single_image(chat_id, file_id, original_name="ChallengeItem"):
                 supports_streaming=True
             )
 
+        # Stage 6: Done — delete progress message
         try:
             bot.delete_message(chat_id, status_msg.message_id)
         except Exception:
@@ -854,7 +995,10 @@ def handle_single_image(chat_id, file_id, original_name="ChallengeItem"):
         print(f"[RENDER ERROR]: {traceback.format_exc()}")
         try:
             bot.edit_message_text(
-                f"❌ *Render Error*: `{str(e)}`",
+                f"❌ *{BOT_BRAND} — Render Failed*\n\n"
+                f"📁 *Item*: `{clean_name}`\n"
+                f"⚠️ *Error*: `{str(e)[:200]}`\n\n"
+                f"_Please try again or contact support._",
                 chat_id=chat_id,
                 message_id=status_msg.message_id
             )
@@ -863,7 +1007,6 @@ def handle_single_image(chat_id, file_id, original_name="ChallengeItem"):
 
     finally:
         # AUTOMATIC IMMEDIATE SERVER CACHE CLEANUP
-        # Delete input image and rendered MP4 from server disk!
         try:
             if temp_image_path.exists():
                 temp_image_path.unlink()
@@ -886,17 +1029,33 @@ def handle_batch_zip(chat_id, file_id, zip_name="batch.zip"):
     batch_dir = TEMP_DIR / f"zip_batch_{chat_id}_{batch_id}"
     extract_dir = batch_dir / "extracted"
     local_zip = batch_dir / zip_name
+    batch_start = time.time()
     
     batch_dir.mkdir(parents=True, exist_ok=True)
     extract_dir.mkdir(parents=True, exist_ok=True)
     
     status_msg = bot.send_message(
         chat_id,
-        f"📦 *Extracting \"{zip_name}\"...*\n⏳ _Preparing 60 FPS batch queue..._"
+        f"📦 *{BOT_BRAND} — Batch Mode*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📁 *Archive*: `{zip_name}`\n\n"
+        f"📊 *Stage*: 📥 Downloading ZIP  `[●○○○○]`\n"
+        f"⏱️ *Elapsed*: `0s`"
     )
     
     rendered_videos = []
     output_zip_path = EXPORTS_DIR / f"StopChallenge_Batch_{batch_id}.zip"
+    last_batch_edit = [0]  # mutable for closure
+
+    def batch_progress_update(text):
+        now = time.time()
+        if (now - last_batch_edit[0]) < 2.0:
+            return
+        try:
+            bot.edit_message_text(text, chat_id=chat_id, message_id=status_msg.message_id)
+            last_batch_edit[0] = time.time()
+        except Exception:
+            pass
 
     try:
         # 1. Download ZIP
@@ -906,6 +1065,14 @@ def handle_batch_zip(chat_id, file_id, zip_name="batch.zip"):
             f.write(downloaded)
 
         # 2. Extract ZIP
+        batch_progress_update(
+            f"📦 *{BOT_BRAND} — Batch Mode*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"📁 *Archive*: `{zip_name}`\n\n"
+            f"📊 *Stage*: 📂 Extracting Files  `[●●○○○]`\n"
+            f"⏱️ *Elapsed*: `{fmt_time(time.time() - batch_start)}`"
+        )
+
         with zipfile.ZipFile(local_zip, 'r') as z:
             z.extractall(extract_dir)
 
@@ -941,19 +1108,16 @@ def handle_batch_zip(chat_id, file_id, zip_name="batch.zip"):
 
         if not image_files:
             return bot.edit_message_text(
-                f"❌ *No Images Found in \"{zip_name}\"!*\nPlease include .png or .jpg image files.",
+                f"❌ *{BOT_BRAND} — No Images Found*\n\n"
+                f"📁 Archive `{zip_name}` contained no .png/.jpg files.\n"
+                f"_Please include image files in your ZIP._",
                 chat_id=chat_id,
                 message_id=status_msg.message_id
             )
 
         total_count = len(image_files)
-        bot.edit_message_text(
-            f"🎬 *Batch Queue Ready*: `{total_count} Videos`\n⏳ _Rendering 60 FPS videos..._",
-            chat_id=chat_id,
-            message_id=status_msg.message_id
-        )
 
-        # 4. Render each video
+        # 4. Render each video with live progress
         for idx, img_path in enumerate(image_files):
             clean_item_name = img_path.stem
             out_mp4 = EXPORTS_DIR / f"{idx+1:02d}_{clean_item_name}_60FPS.mp4"
@@ -978,17 +1142,49 @@ def handle_batch_zip(chat_id, file_id, zip_name="batch.zip"):
                 if det_dur and det_dur > 0:
                     item_duration = det_dur
 
-            try:
-                bot.edit_message_text(
-                    f"🎬 *Rendering Video {idx+1}/{total_count}* • `{clean_item_name}`\n"
-                    f"📊 Batch Progress: **{int((idx / total_count) * 100)}%**\n"
-                    f"⏱️ `{item_duration}s` @ `60 FPS` • `{session.get('resolution', '720p').upper()}`\n"
-                    f"🎵 `{'Audio Track Attached' if chosen_audio else 'Silent'}`",
-                    chat_id=chat_id,
-                    message_id=status_msg.message_id
-                )
-            except Exception:
-                pass
+            overall_pct = int((idx / total_count) * 100)
+            overall_bar = make_progress_bar(overall_pct, 15)
+
+            # Batch item render callback
+            def make_item_progress(item_idx, item_name):
+                item_render_start = time.time()
+                def on_item_prog(pct, cur_frame, total_frames):
+                    now = time.time()
+                    if (now - last_batch_edit[0]) < 2.5:
+                        return
+                    item_elapsed = now - item_render_start
+                    batch_elapsed = now - batch_start
+                    if pct > 0:
+                        item_eta = (item_elapsed / pct) * (100 - pct)
+                    else:
+                        item_eta = 0
+                    item_bar = make_progress_bar(pct, 15)
+                    cur_overall = int(((item_idx + pct/100) / total_count) * 100)
+                    cur_overall_bar = make_progress_bar(cur_overall, 15)
+
+                    text = (
+                        f"📦 *{BOT_BRAND} — Batch Render*\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                        f"📊 *Overall*: `[{cur_overall_bar}]` *{cur_overall}%*\n"
+                        f"🎞️ *Video {item_idx+1}/{total_count}*: `{item_name}`\n\n"
+                        f"`[{item_bar}]` *{pct}%*\n\n"
+                        f"⏱️ *Item ETA*: `{fmt_time(item_eta)}`\n"
+                        f"🕐 *Batch Time*: `{fmt_time(batch_elapsed)}`\n\n"
+                        f"🎨 `{session.get('bg_gradient', 'cyberpunk')}` • "
+                        f"📺 `{session.get('resolution', '720p').upper()}`"
+                    )
+                    batch_progress_update(text)
+                return on_item_prog
+
+            # Show item start
+            batch_progress_update(
+                f"📦 *{BOT_BRAND} — Batch Render*\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"📊 *Overall*: `[{overall_bar}]` *{overall_pct}%*\n"
+                f"🎞️ *Video {idx+1}/{total_count}*: `{clean_item_name}`\n\n"
+                f"📊 *Stage*: 🔧 Processing Image\n"
+                f"🕐 *Batch Time*: `{fmt_time(time.time() - batch_start)}`"
+            )
 
             try:
                 res = renderer.render_stop_challenge_video({
@@ -1013,23 +1209,27 @@ def handle_batch_zip(chat_id, file_id, zip_name="batch.zip"):
                     'particle_color': session.get('particle_color', '#00f3ff'),
                     'audio_path': chosen_audio,
                     'output_path': str(out_mp4)
-                })
+                }, on_progress=make_item_progress(idx, clean_item_name))
                 rendered_videos.append(out_mp4)
             except Exception as item_err:
                 print(f"[BATCH ITEM ERROR] {img_path.name}: {item_err}")
 
         if not rendered_videos:
             return bot.edit_message_text(
-                "❌ *Batch Rendering Failed*: None of the videos could be completed.",
+                f"❌ *{BOT_BRAND} — Batch Failed*\n\n"
+                f"None of the {total_count} videos could be rendered.\n"
+                f"_Please check your images and try again._",
                 chat_id=chat_id,
                 message_id=status_msg.message_id
             )
 
         # 5. Bundle rendered MP4s into a single ZIP archive
-        bot.edit_message_text(
-            f"📦 *Packaging {len(rendered_videos)} Videos into ZIP Archive...*",
-            chat_id=chat_id,
-            message_id=status_msg.message_id
+        batch_progress_update(
+            f"📦 *{BOT_BRAND} — Packaging*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"📊 *Overall*: `[{make_progress_bar(95, 15)}]` *95%*\n\n"
+            f"📤 Packaging `{len(rendered_videos)}` videos into ZIP...\n"
+            f"🕐 *Batch Time*: `{fmt_time(time.time() - batch_start)}`"
         )
 
         with zipfile.ZipFile(output_zip_path, 'w', zipfile.ZIP_DEFLATED) as out_zip:
@@ -1038,12 +1238,17 @@ def handle_batch_zip(chat_id, file_id, zip_name="batch.zip"):
                     out_zip.write(v_path, arcname=v_path.name)
 
         zip_size_mb = os.path.getsize(output_zip_path) / (1024 * 1024)
+        total_batch_time = time.time() - batch_start
+
         caption = (
-            f"🎉 *ZIP Batch Complete!* 📦\n"
-            f"📁 `{len(rendered_videos)} Videos Ready` • `{zip_size_mb:.1f} MB`\n\n"
-            f"⚙️ *Specs*: `60 FPS` • `{session.get('resolution', '720p').upper()}` • `{session.get('motion_type', 'spin').upper()}`\n"
-            f"🎨 `{session.get('bg_gradient', 'cyberpunk')}`\n\n"
-            f"🔥 #StopChallenge #Batch #Shorts #Reels"
+            f"✅ *{BOT_BRAND} — Batch Complete!* 📦\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"📁 *Videos*: `{len(rendered_videos)}/{total_count}` rendered\n"
+            f"📦 *Size*: `{zip_size_mb:.1f} MB`\n"
+            f"⏱️ *Total Time*: `{fmt_time(total_batch_time)}`\n\n"
+            f"⚙️ `60 FPS` • `{session.get('resolution', '720p').upper()}` • `{session.get('motion_type', 'spin').upper()}`\n"
+            f"🎨 `{renderer.BG_PRESETS_LABELS.get(session.get('bg_gradient', 'cyberpunk'), 'cyberpunk')}`\n\n"
+            f"🔥 {BOT_TAG}"
         )
 
         with open(output_zip_path, 'rb') as zf:
@@ -1062,13 +1267,18 @@ def handle_batch_zip(chat_id, file_id, zip_name="batch.zip"):
     except Exception as e:
         print(f"[BATCH ZIP ERROR]: {traceback.format_exc()}")
         try:
-            bot.edit_message_text(f"❌ *Batch Error*: `{str(e)}`", chat_id=chat_id, message_id=status_msg.message_id)
+            bot.edit_message_text(
+                f"❌ *{BOT_BRAND} — Batch Error*\n\n"
+                f"⚠️ *Error*: `{str(e)[:200]}`\n\n"
+                f"_Please try again._",
+                chat_id=chat_id,
+                message_id=status_msg.message_id
+            )
         except Exception:
             pass
 
     finally:
         # AUTOMATIC SERVER CLEANUP
-        # Delete output ZIP archive, all individual rendered videos, and extracted temp directory!
         try:
             if output_zip_path.exists():
                 output_zip_path.unlink()
@@ -1117,6 +1327,10 @@ def handle_audio_upload(chat_id, file_id, file_name="audio.mp3"):
         with open(local_path, 'wb') as f:
             f.write(downloaded)
 
+        # Detect audio duration
+        audio_dur = renderer.get_audio_duration(str(local_path))
+        dur_text = f"`{audio_dur}s`" if audio_dur else "_Unknown_"
+
         session['custom_audio_files'].append({
             'name': safe_name,
             'path': str(local_path),
@@ -1127,15 +1341,17 @@ def handle_audio_upload(chat_id, file_id, file_name="audio.mp3"):
 
         pool_len = len(session['custom_audio_files'])
         msg = (
-            f"🎵 *Audio Track Added to Pool!*\n\n"
-            f"• Track: `{safe_name}`\n"
-            f"• Total Pool: **{pool_len} tracks**\n"
-            f"• Mode: **Random Pool (ACTIVE ✅)**\n\n"
-            f"✨ _Every video rendered will randomly pick a soundtrack from this pool!_"
+            f"🎵 *{BOT_BRAND} — Audio Added*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"📁 *Track*: `{safe_name}`\n"
+            f"⏱️ *Duration*: {dur_text}\n"
+            f"🎶 *Pool Size*: `{pool_len} track{'s' if pool_len > 1 else ''}`\n"
+            f"🔀 *Mode*: `Random Pool` ✅\n\n"
+            f"💡 _Video duration will auto-match to audio length!_"
         )
         bot.send_message(chat_id, msg)
     except Exception as e:
-        bot.send_message(chat_id, f"❌ Failed to save audio: {e}")
+        bot.send_message(chat_id, f"❌ *Audio Upload Failed*: `{e}`")
 
 # -------------------------------------------------------------
 # DISPATCHERS FOR USER ATTACHMENTS
@@ -1216,10 +1432,12 @@ threading.Thread(target=start_http_server, daemon=True).start()
 # MAIN START
 # -------------------------------------------------------------
 
+BOT_START_TIME = time.time()
+
 if __name__ == '__main__':
-    print(f"[BOT] Stop Challenge Python Telegram Bot is active and listening on port {PORT}!")
+    print(f"[BOT] {BOT_BRAND} is active and listening on port {PORT}!")
     try:
-        bot.delete_webhook(drop_pending_updates=False)
+        bot.delete_webhook(drop_pending_updates=True)
     except Exception as e:
         print(f"[BOT] Webhook clear notice: {e}")
     bot.infinity_polling(timeout=20, long_polling_timeout=20)
