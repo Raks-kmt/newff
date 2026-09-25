@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Stop Challenge Pro Studio - 4K 60FPS Video Editor</title>
+  
+  <meta name="theme-color" content="#00f3ff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛑</text></svg>">
+  
+  <!-- Modern Typography & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Bungee&family=Montserrat:wght@700;800;900&family=Outfit:wght@400;600;700;800;900&family=Space+Grotesk:wght@600;700;800&family=Titan+One&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="pro-editor-theme">
+  <div class="app-layout">
+    <!-- =========================================================================
+         1. TOP PRO APP HEADER & MENU BAR (Premiere / CapCut Style)
+         ========================================================================= -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="brand-wrap">
+          <div class="brand-logo">🛑</div>
+          <div>
+            <div class="brand-title">
+              <span class="gradient-text">STOP CHALLENGE</span> <span class="badge-pro">PRO 2.0</span>
+            </div>
+            <div class="brand-subtitle">Viral 4K 60FPS Video Creation Suite</div>
+          </div>
+        </div>
+
+        <div class="engine-status-badge">
+          <span class="pulse-dot"></span>
+          <span class="status-text">60 FPS REALTIME</span>
+        </div>
+
+        <div class="save-status-badge" id="saveStatusBadge" title="Automatic Real-time Session Auto-Save">
+          <span class="save-status-icon">💾</span>
+          <span class="save-status-text" id="saveStatusText">Auto-Saved</span>
+        </div>
+      </div>
+
+      <!-- Center Timecode & Project Info -->
+      <div class="header-center">
+        <div class="timecode-display" id="headerTimecodeDisplay">
+          <span class="tc-current" id="tcCurrent">00:00:00.00</span>
+          <span class="tc-divider">/</span>
+          <span class="tc-total" id="tcTotal">00:00:10.00</span>
+        </div>
+      </div>
+
+      <!-- Right Actions -->
+      <div class="header-actions">
+        <button id="openExportsFolderBtn" class="btn btn-secondary btn-sm" title="Open exports folder in Windows Explorer">
+          <span>📂</span>
+          <span>Exports Folder</span>
+        </button>
+
+        <button id="openExportSettingsModalBtn" class="btn btn-primary btn-sm">
+          <span class="icon">🚀</span>
+          <span>Export 4K 60FPS</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- =========================================================================
+         2. MAIN WORKSPACE (INSPECTOR / MEDIA BIN + PREVIEW MONITOR)
+         ========================================================================= -->
+    <div class="workspace-grid">
+      <!-- LEFT PRO INSPECTOR & MEDIA BIN -->
+      <aside class="control-panel">
+        <nav class="panel-tabs">
+          <button class="tab-btn active" data-tab="objects-tab" title="Layers & Objects">
+            <span class="tab-icon">📦</span>
+            <span>Objects</span>
+          </button>
+          <button class="tab-btn" data-tab="outline-tab" title="Silhouette & Outline FX">
+            <span class="tab-icon">🎨</span>
+            <span>Outline FX</span>
+          </button>
+          <button class="tab-btn" data-tab="motion-tab" title="Motion Physics">
+            <span class="tab-icon">⚡</span>
+            <span>Motion</span>
+          </button>
+          <button class="tab-btn" data-tab="background-tab" title="Background & Music">
+            <span class="tab-icon">🌌</span>
+            <span>BG & Audio</span>
+          </button>
+          <button class="tab-btn" data-tab="text-tab" title="Hooks & Overlays">
+            <span class="tab-icon">📝</span>
+            <span>Overlays</span>
+          </button>
+          <button class="tab-btn" data-tab="batch-tab" title="Batch Video Factory">
+            <span class="tab-icon">🏭</span>
+            <span>Batch Factory</span>
+          </button>
+        </nav>
+
+        <div class="panel-content">
+          <!-- TAB 1: OBJECTS & PRODUCTS -->
+          <div id="objects-tab" class="tab-pane active">
+            <!-- Upload Custom Product PNG -->
+            <div class="card-section">
+              <div class="section-header">
+                <h3>Upload Product Image / PNG</h3>
+                <span class="badge-accent">Drag & Drop</span>
+              </div>
+
+              <div class="upload-dropzone" id="multiPngDropzone">
+                <input type="file" id="multiPngInput" accept="image/png,image/webp,image/svg+xml" class="file-input">
+                <div class="dropzone-content">
+                  <div class="upload-icon">📥</div>
+                  <p class="upload-title">Drop Transparent Product PNG</p>
+                  <p class="upload-sub">Auto-generates glowing silhouette outline instantly</p>
+                </div>
+              </div>
+
+              <!-- Categorized Viral Stickers -->
+              <div class="emoji-picker-wrap mt-3">
+                <label class="toggle-label" style="margin-bottom:6px; display:block;">🍔 Viral Foods & Treats:</label>
+                <div class="emoji-quick-pills">
+                  <span class="emoji-pill" data-emoji="🍔">🍔 Burger</span>
+                  <span class="emoji-pill" data-emoji="🍕">🍕 Pizza</span>
+                  <span class="emoji-pill" data-emoji="🍩">🍩 Donut</span>
+                  <span class="emoji-pill" data-emoji="🍟">🍟 Fries</span>
+                  <span class="emoji-pill" data-emoji="🥤">🥤 Soda</span>
+                  <span class="emoji-pill" data-emoji="🌮">🌮 Taco</span>
+                  <span class="emoji-pill" data-emoji="🍣">🍣 Sushi</span>
+                  <span class="emoji-pill" data-emoji="🍦">🍦 Ice Cream</span>
+                  <span class="emoji-pill" data-emoji="👟">👟 Sneaker</span>
+                  <span class="emoji-pill" data-emoji="💎">💎 Diamond</span>
+                  <span class="emoji-pill" data-emoji="🏎️">🏎️ Supercar</span>
+                  <span class="emoji-pill" data-emoji="👑">👑 Crown</span>
+                  <span class="emoji-pill" data-emoji="🎮">🎮 Controller</span>
+                  <span class="emoji-pill" data-emoji="🏆">🏆 Trophy</span>
+                  <span class="emoji-pill" data-emoji="🚀">🚀 Rocket</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Active Object Inspector -->
+            <div class="card-section">
+              <div class="section-header">
+                <h3>Active Product Controls</h3>
+                <span class="badge-accent">Inspector</span>
+              </div>
+              <div id="itemSlotsContainer" class="item-slots-container">
+                <!-- Dynamically generated slot cards with live sliders -->
+              </div>
+            </div>
+
+            <!-- Global Scale Slider -->
+            <div class="card-section">
+              <div class="slider-group">
+                <div class="slider-header">
+                  <label for="globalScale">Master Scale (All Items)</label>
+                  <span class="val-display" id="globalScaleVal">100%</span>
+                </div>
+                <input type="range" id="globalScale" min="30" max="180" value="100" class="custom-slider">
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 2: OUTLINE & SILHOUETTE FX -->
+          <div id="outline-tab" class="tab-pane">
+            <div class="card-section">
+              <div class="section-header">
+                <h3>Silhouette Rendering Mode</h3>
+                <span class="badge-accent">Target FX</span>
+              </div>
+
+              <div class="btn-group-segment" id="outlineModeGroup">
+                <button class="btn-segment active" data-mode="outline-only">Border Line Only</button>
+                <button class="btn-segment" data-mode="silhouette">Solid Silhouette</button>
+                <button class="btn-segment" data-mode="both">Border + Fill</button>
+              </div>
+
+              <div class="slider-group mt-3">
+                <div class="slider-header">
+                  <label for="borderThickness">Border Line Thickness</label>
+                  <span class="val-display" id="borderThicknessVal">6 px</span>
+                </div>
+                <input type="range" id="borderThickness" min="1" max="25" value="6" class="custom-slider">
+              </div>
+
+              <div class="slider-group">
+                <div class="slider-header">
+                  <label for="glowIntensity">Neon Glow Intensity</label>
+                  <span class="val-display" id="glowIntensityVal">15 px</span>
+                </div>
+                <input type="range" id="glowIntensity" min="0" max="45" value="15" class="custom-slider">
+              </div>
+            </div>
+
+            <!-- Outline Stroke Color -->
+            <div class="card-section">
+              <div class="section-header">
+                <h3>Outline Stroke Color</h3>
+                <span class="val-display" id="outlineColorVal">#ffffff</span>
+              </div>
+
+              <div class="quick-colors">
+                <div class="color-dot active" style="background:#ffffff;" data-color="#ffffff"></div>
+                <div class="color-dot" style="background:#00f3ff;" data-color="#00f3ff"></div>
+                <div class="color-dot" style="background:#ff007f;" data-color="#ff007f"></div>
+                <div class="color-dot" style="background:#ffe600;" data-color="#ffe600"></div>
+                <div class="color-dot" style="background:#00ff88;" data-color="#00ff88"></div>
+                <div class="color-dot" style="background:#7928ca;" data-color="#7928ca"></div>
+                <input type="color" id="outlineColor" value="#ffffff" class="color-picker-input">
+              </div>
+
+              <div class="slider-group mt-3">
+                <div class="slider-header">
+                  <label for="targetYOffset">Target Vertical Offset (Y-Shift)</label>
+                  <span class="val-display" id="targetYVal">0 px</span>
+                </div>
+                <input type="range" id="targetYOffset" min="-400" max="400" value="0" class="custom-slider">
+              </div>
+
+
+            </div>
+          </div>
+
+          <!-- TAB 3: MOTION PHYSICS & ANIMATION -->
+          <div id="motion-tab" class="tab-pane">
+            <div class="card-section">
+              <div class="section-header">
+                <h3>Motion Style</h3>
+                <span class="badge-accent">2 Core Styles</span>
+              </div>
+
+              <div class="motion-grid" id="motionGrid">
+                <div class="motion-card active" data-motion="pendulum">
+                  <div class="motion-icon">🔔</div>
+                  <div class="motion-info">
+                    <h4>Clock Bell / Pendulum</h4>
+                    <p>Swings back & forth, matching at apex</p>
+                  </div>
+                  <div class="motion-check">✓</div>
+                </div>
+
+                <div class="motion-card" data-motion="spin">
+                  <div class="motion-icon">🔄</div>
+                  <div class="motion-info">
+                    <h4>360° Spin / Rotating</h4>
+                    <p>Continuous rotation, aligning straight</p>
+                  </div>
+                  <div class="motion-check">✓</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card-section">
+              <div class="slider-group">
+                <div class="slider-header">
+                  <label for="motionSpeed">Motion Speed / Difficulty</label>
+                  <span class="val-display" id="motionSpeedVal">1.0x (Medium)</span>
+                </div>
+                <input type="range" id="motionSpeed" min="0.3" max="2.5" step="0.1" value="1.0" class="custom-slider">
+              </div>
+
+              <div class="slider-group">
+                <div class="slider-header">
+                  <label for="motionAmplitude">Swing / Movement Distance</label>
+                  <span class="val-display" id="motionAmplitudeVal">85%</span>
+                </div>
+                <input type="range" id="motionAmplitude" min="20" max="100" value="85" class="custom-slider">
+              </div>
+
+              <div class="slider-group">
+                <div class="slider-header">
+                  <label for="videoDuration">Challenge Video Duration</label>
+                  <span class="val-display" id="videoDurationVal">10.0 Seconds</span>
+                </div>
+                <input type="range" id="videoDuration" min="3" max="30" step="0.5" value="10" class="custom-slider">
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 4: BACKGROUND, ATMOSPHERE & AUDIO -->
+          <div id="background-tab" class="tab-pane">
+            <!-- 1. Procedural Backgrounds & Presets -->
+            <div class="card-section">
+              <div class="section-header">
+                <h3>Curated 4K Studio Gradients</h3>
+                <span class="badge-accent">Presets</span>
+              </div>
+
+              <div class="gradient-palette" id="gradientPalette">
+                <div class="grad-tile active" data-grad="cyberpunk" style="background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);" title="Cyber Night Grid"></div>
+                <div class="grad-tile" data-grad="neon-city" style="background: linear-gradient(135deg, #0a001a, #2e0854, #ff007f, #ffaa00);" title="Synthwave Neon City"></div>
+                <div class="grad-tile" data-grad="gaming-rgb" style="background: radial-gradient(circle, #1a103c, #05060a);" title="Gaming Hex Mesh"></div>
+                <div class="grad-tile" data-grad="laser-matrix" style="background: linear-gradient(135deg, #020b1e, #081e3d, #00f3ff);" title="Hyper Blue Lasers"></div>
+                <div class="grad-tile" data-grad="vaporwave" style="background: linear-gradient(135deg, #2b1055, #7597de, #ff007f);" title="Sunset Vaporwave"></div>
+                <div class="grad-tile" data-grad="inferno" style="background: radial-gradient(circle, #ff3d00, #dd2c00, #150000);" title="Inferno Lava Fire"></div>
+                <div class="grad-tile" data-grad="luxury-gold" style="background: radial-gradient(circle, #d4af37, #856d28, #0d0c0a);" title="24K Luxury Gold"></div>
+                <div class="grad-tile" data-grad="midnight-diamond" style="background: radial-gradient(circle, #0d3268, #071836, #020712);" title="Midnight Sapphire"></div>
+                <div class="grad-tile" data-grad="emerald-noir" style="background: radial-gradient(circle, #004d40, #00241b, #020d09);" title="Imperial Emerald"></div>
+                <div class="grad-tile" data-grad="rose-gold" style="background: linear-gradient(135deg, #3a1c28, #b76e79, #1b0d12);" title="Rose Gold Champagne"></div>
+                <div class="grad-tile" data-grad="deep-space" style="background: radial-gradient(circle, #1a103c, #0b051a, #020108);" title="Deep Space Nebula"></div>
+                <div class="grad-tile" data-grad="supernova" style="background: radial-gradient(circle, #00f3ff, #7928ca, #05010a);" title="Supernova Flare"></div>
+                <div class="grad-tile" data-grad="aurora" style="background: linear-gradient(135deg, #031b38, #0575e6, #00f260);" title="Aurora Borealis"></div>
+                <div class="grad-tile" data-grad="dark-matter" style="background: radial-gradient(circle, #120024, #28004f, #000000);" title="Dark Matter Vortex"></div>
+                <div class="grad-tile" data-grad="studio-dark" style="background: radial-gradient(circle, #323946, #181b22, #090a0d);" title="Studio Charcoal Dark"></div>
+                <div class="grad-tile" data-grad="viral-split" style="background: linear-gradient(135deg, #ff007f, #100b20, #00f3ff);" title="TikTok Split Neon"></div>
+                <div class="grad-tile" data-grad="electric-violet" style="background: linear-gradient(135deg, #7b2cbf, #3c096c, #10002b);" title="Electric Violet"></div>
+                <div class="grad-tile" data-grad="acid-lime" style="background: linear-gradient(135deg, #00ff88, #0b3d22, #03140a);" title="Acid Lime High-Voltage"></div>
+                <div class="grad-tile" data-grad="pure-oled" style="background: #000000; border: 1px solid rgba(255,255,255,0.2);" title="Pure OLED True Black"></div>
+                <div class="grad-tile" data-grad="pastel-creator" style="background: linear-gradient(135deg, #ff9a9e, #fecfef, #a1c4fd);" title="Pastel Aesthetic"></div>
+              </div>
+            </div>
+
+            <!-- 2. Atmospheric Floating Glow Particles -->
+            <div class="card-section">
+              <div class="section-header">
+                <h3>Atmosphere & Floating Glow Particles</h3>
+                <span class="badge-accent">Particles</span>
+              </div>
+
+              <div class="toggle-row">
+                <div>
+                  <label for="showSparkles" class="toggle-label">Floating Glow Sparkles</label>
+                  <p class="toggle-sub">Ambient drifting particles in 3D depth</p>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="showSparkles" checked>
+                  <span class="slider-switch"></span>
+                </label>
+              </div>
+
+              <div class="grid-2-col mt-2">
+                <div class="slider-group">
+                  <div class="slider-header">
+                    <label for="particleCount">Particle Density</label>
+                    <span class="val-display" id="particleCountVal">40</span>
+                  </div>
+                  <input type="range" id="particleCount" min="10" max="90" value="40" class="custom-slider">
+                </div>
+
+                <div class="slider-group">
+                  <div class="slider-header">
+                    <label for="particleSpeed">Drift Speed</label>
+                    <span class="val-display" id="particleSpeedVal">1.0x</span>
+                  </div>
+                  <input type="range" id="particleSpeed" min="0.2" max="3.0" step="0.1" value="1.0" class="custom-slider">
+                </div>
+              </div>
+
+              <div class="color-picker-row mt-2">
+                <label for="particleColor">Sparkle Color</label>
+                <div class="color-input-wrapper">
+                  <input type="color" id="particleColor" value="#00f3ff" class="color-picker-input">
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. Custom Audio Upload -->
+            <div class="card-section">
+              <div class="section-header">
+                <h3>Custom Music / Audio</h3>
+                <span class="badge-accent">MP3 / WAV / AAC</span>
+              </div>
+              <p class="section-desc">Add your own viral song, voiceover, or sound effect:</p>
+
+              <div class="upload-dropzone" id="customAudioDropzone">
+                <input type="file" id="customAudioInput" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac" class="file-input">
+                <div class="dropzone-content">
+                  <div class="upload-icon">🎵</div>
+                  <p class="upload-title">Drop Your Audio / Song Here</p>
+                  <p class="upload-sub">Supports MP3, WAV, AAC, M4A, OGG (Auto-loops for video duration)</p>
+                </div>
+              </div>
+
+              <!-- Active Custom Audio Card -->
+              <div id="customAudioCard" class="item-slot-card mt-2" style="display: none;">
+                <div class="slot-header">
+                  <div class="slot-title-badge">
+                    <span class="slot-tag">CUSTOM TRACK</span>
+                    <span class="slot-name" id="customAudioFileName">track.mp3</span>
+                  </div>
+                  <button class="btn btn-ghost btn-sm" id="removeCustomAudioBtn" title="Remove custom audio">
+                    ✕ Clear
+                  </button>
+                </div>
+                <div class="slot-body" style="padding-top: 4px; display: flex; justify-content: space-between; align-items: center;">
+                  <div style="font-size: 0.72rem; color: var(--text-muted);">
+                    ⏱️ Track Duration: <span id="customAudioDuration" style="color: var(--accent-cyan); font-weight: bold;">--:--</span>
+                  </div>
+                  <span class="badge-accent">Active in Export</span>
+                </div>
+              </div>
+
+              <div class="slider-group mt-3">
+                <div class="slider-header">
+                  <label for="audioVolume">Master Music Volume</label>
+                  <span class="val-display" id="audioVolumeVal">80%</span>
+                </div>
+                <input type="range" id="audioVolume" min="0" max="100" value="80" class="custom-slider">
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 5: HOOKS & OVERLAYS -->
+          <div id="text-tab" class="tab-pane">
+            <!-- 1. Headline Viral Hook & Typography -->
+            <div class="card-section">
+              <div class="section-header">
+                <h3>Headline Hook & Viral Text</h3>
+                <span class="badge-accent">Headline</span>
+              </div>
+
+              <div class="form-group">
+                <label for="headerText">Headline Text</label>
+                <input type="text" id="headerText" value="CAN YOU STOP THIS? 🛑" class="custom-input">
+              </div>
+
+              <!-- Quick Viral Hook Bank -->
+              <div class="quick-hooks-wrap mt-2">
+                <label class="toggle-label" style="margin-bottom:4px; display:block;">🔥 1-Tap Viral Hooks:</label>
+                <div class="quick-hooks-chips">
+                  <button class="hook-chip" data-hook="CAN YOU STOP THIS? 🛑">🛑 Stop Challenge</button>
+                  <button class="hook-chip" data-hook="PERFECT MATCH CHALLENGE 🎯">🎯 Perfect Match</button>
+                  <button class="hook-chip" data-hook="DON'T BLINK OR YOU MISS! 👀">👀 Don't Blink</button>
+                  <button class="hook-chip" data-hook="ONLY 1% CAN DO THIS! 😱">😱 Only 1%</button>
+                  <button class="hook-chip" data-hook="IMPOSSIBLE LEVEL 💀">💀 Impossible</button>
+                  <button class="hook-chip" data-hook="STOP AT 99% TO WIN 🏆">🏆 99% Win</button>
+                  <button class="hook-chip" data-hook="BURGER SYNC TEST 🍔">🍔 Burger Sync</button>
+                  <button class="hook-chip" data-hook="FILL THE OUTLINE! 📦">📦 Fill Outline</button>
+                </div>
+              </div>
+
+              <!-- Font Family Selector -->
+              <div class="form-group mt-3">
+                <label for="headerFontFamily">Typography Font</label>
+                <select id="headerFontFamily" class="custom-select">
+                  <option value="Outfit" selected>Outfit (Bold Viral Sans)</option>
+                  <option value="Anton">Anton / Impact (Punchy Shorts)</option>
+                  <option value="Montserrat">Montserrat (Modern Clean)</option>
+                  <option value="Space Grotesk">Space Grotesk (Cyber Futuristic)</option>
+                  <option value="Titan One">Titan One (Chunky 3D Display)</option>
+                  <option value="Bungee">Bungee (Arcade Gaming)</option>
+                </select>
+              </div>
+
+              <!-- Font Size & Position Y -->
+              <div class="grid-2-col mt-2">
+                <div class="slider-group">
+                  <div class="slider-header">
+                    <label for="headerTextSize">Font Size</label>
+                    <span class="val-display" id="headerTextSizeVal">52 px</span>
+                  </div>
+                  <input type="range" id="headerTextSize" min="20" max="110" value="52" class="custom-slider">
+                </div>
+
+                <div class="slider-group">
+                  <div class="slider-header">
+                    <label for="headerPosY">Vertical Y-Pos</label>
+                    <span class="val-display" id="headerPosYVal">55 px</span>
+                  </div>
+                  <input type="range" id="headerPosY" min="15" max="350" value="55" class="custom-slider">
+                </div>
+              </div>
+
+              <!-- Color & Style -->
+              <div class="form-group mt-2">
+                <label>Text Color & Theme</label>
+                <div class="color-picker-row">
+                  <input type="color" id="headerTextColor" value="#ffe600" class="color-picker-input">
+                  <span class="val-display" id="headerTextColorVal" style="font-size:0.75rem;">#ffe600</span>
+                  <div class="quick-colors" style="margin-left:auto;">
+                    <div class="color-dot active" style="background:#ffe600;" data-color="#ffe600" title="Gold Yellow"></div>
+                    <div class="color-dot" style="background:#00f3ff;" data-color="#00f3ff" title="Neon Cyan"></div>
+                    <div class="color-dot" style="background:#ffffff;" data-color="#ffffff" title="Pure White"></div>
+                    <div class="color-dot" style="background:#ff007f;" data-color="#ff007f" title="Cyber Pink"></div>
+                    <div class="color-dot" style="background:#00ff88;" data-color="#00ff88" title="Acid Green"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Text Gradient Presets -->
+              <div class="form-group mt-2">
+                <label>Text Gradient FX</label>
+                <div class="text-grad-presets">
+                  <button class="btn-tag active" data-tgrad="solid">Solid</button>
+                  <button class="btn-tag" data-tgrad="gold">🧈 24K Gold</button>
+                  <button class="btn-tag" data-tgrad="cyber">⚡ Cyber Neon</button>
+                  <button class="btn-tag" data-tgrad="neon-green">🔋 Acid Lime</button>
+                  <button class="btn-tag" data-tgrad="fire">🔥 Inferno Fire</button>
+                  <button class="btn-tag" data-tgrad="violet">💜 Electric Violet</button>
+                </div>
+              </div>
+
+              <!-- Stroke & Border Outline -->
+              <div class="slider-group mt-3">
+                <div class="slider-header">
+                  <label for="headerStrokeWidth">Text Stroke Border</label>
+                  <span class="val-display" id="headerStrokeWidthVal">0 px</span>
+                </div>
+                <input type="range" id="headerStrokeWidth" min="0" max="16" value="0" class="custom-slider">
+              </div>
+
+              <div class="color-picker-row">
+                <label for="headerStrokeColor">Stroke Color</label>
+                <input type="color" id="headerStrokeColor" value="#000000" class="color-picker-input">
+              </div>
+
+              <!-- Neon Text Glow -->
+              <div class="slider-group mt-3">
+                <div class="slider-header">
+                  <label for="headerGlowBlur">Neon Text Glow Blur</label>
+                  <span class="val-display" id="headerGlowBlurVal">18 px</span>
+                </div>
+                <input type="range" id="headerGlowBlur" min="0" max="45" value="18" class="custom-slider">
+              </div>
+
+              <!-- Background Pill Banner Style -->
+              <div class="form-group mt-3">
+                <label>Banner Pill Style</label>
+                <div class="btn-group-segment" id="headerPillStyleGroup">
+                  <button class="btn-segment active" data-pill="glass">Dark Glass</button>
+                  <button class="btn-segment" data-pill="solid">Solid Tag</button>
+                  <button class="btn-segment" data-pill="neon">Neon Border</button>
+                  <button class="btn-segment" data-pill="none">No Pill</button>
+                </div>
+              </div>
+
+              <!-- Text Dynamic Animation Style -->
+              <div class="form-group mt-3">
+                <label>Dynamic Motion Animation</label>
+                <div class="btn-group-segment" id="headerAnimGroup">
+                  <button class="btn-segment active" data-anim="none">Static</button>
+                  <button class="btn-segment" data-anim="pulse">💓 Pulse</button>
+                  <button class="btn-segment" data-anim="flicker">⚡ Flicker</button>
+                  <button class="btn-segment" data-anim="wiggle">🌀 Jitter</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. Bottom CTA Subtitle Card -->
+            <div class="card-section">
+              <div class="section-header">
+                <h3>Bottom Subtitle & Call-to-Action</h3>
+                <span class="badge-accent">Caption</span>
+              </div>
+
+              <div class="form-group">
+                <label for="subText">Subtitle Text</label>
+                <input type="text" id="subText" value="PAUSE EXACTLY IN THE OUTLINE! 🎯" class="custom-input">
+              </div>
+
+              <!-- Quick Subtitle Chips -->
+              <div class="quick-hooks-wrap mt-2">
+                <label class="toggle-label" style="margin-bottom:4px; display:block;">💡 Quick Suggestions:</label>
+                <div class="quick-hooks-chips">
+                  <button class="sub-hook-chip" data-sub="PAUSE EXACTLY IN THE OUTLINE! 🎯">🎯 Pause Outline</button>
+                  <button class="sub-hook-chip" data-sub="COMMENT YOUR SCORE BELOW 👇">👇 Comment Score</button>
+                  <button class="sub-hook-chip" data-sub="CAN YOU DO IT IN 3 TRIES? ⏱️">⏱️ 3 Tries</button>
+                  <button class="sub-hook-chip" data-sub="LIKE & SUBSCRIBE IF YOU WON! 🚀">🚀 Like & Share</button>
+                </div>
+              </div>
+
+              <!-- Font Family Selector for Subtitle -->
+              <div class="form-group mt-3">
+                <label for="subFontFamily">Subtitle Font</label>
+                <select id="subFontFamily" class="custom-select">
+                  <option value="Outfit" selected>Outfit (Bold Viral Sans)</option>
+                  <option value="Anton">Anton / Impact (Punchy Shorts)</option>
+                  <option value="Montserrat">Montserrat (Modern Clean)</option>
+                  <option value="Space Grotesk">Space Grotesk (Cyber Futuristic)</option>
+                  <option value="Titan One">Titan One (Chunky 3D Display)</option>
+                  <option value="Bungee">Bungee (Arcade Gaming)</option>
+                </select>
+              </div>
+
+              <div class="grid-2-col mt-2">
+                <div class="slider-group">
+                  <div class="slider-header">
+                    <label for="subTextSize">Subtitle Size</label>
+                    <span class="val-display" id="subTextSizeVal">28 px</span>
+                  </div>
+                  <input type="range" id="subTextSize" min="14" max="65" value="28" class="custom-slider">
+                </div>
+
+                <div class="slider-group">
+                  <div class="slider-header">
+                    <label for="subPosY">Bottom Margin</label>
+                    <span class="val-display" id="subPosYVal">60 px</span>
+                  </div>
+                  <input type="range" id="subPosY" min="15" max="250" value="60" class="custom-slider">
+                </div>
+              </div>
+
+              <!-- Subtitle Color -->
+              <div class="form-group mt-2">
+                <label>Subtitle Text Color</label>
+                <div class="color-picker-row">
+                  <input type="color" id="subTextColor" value="#ffffff" class="color-picker-input">
+                  <span class="val-display" id="subTextColorVal" style="font-size:0.75rem;">#ffffff</span>
+                  <div class="quick-colors" style="margin-left:auto;">
+                    <div class="color-dot active" style="background:#ffffff;" data-subcolor="#ffffff" title="White"></div>
+                    <div class="color-dot" style="background:#ffe600;" data-subcolor="#ffe600" title="Yellow"></div>
+                    <div class="color-dot" style="background:#00f3ff;" data-subcolor="#00f3ff" title="Cyan"></div>
+                    <div class="color-dot" style="background:#00ff88;" data-subcolor="#00ff88" title="Green"></div>
+                    <div class="color-dot" style="background:#ff007f;" data-subcolor="#ff007f" title="Pink"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-group mt-2">
+                <label>Subtitle Pill Style</label>
+                <div class="btn-group-segment" id="subPillStyleGroup">
+                  <button class="btn-segment active" data-subpill="glass">Dark Glass</button>
+                  <button class="btn-segment" data-subpill="neon">Cyan Border</button>
+                  <button class="btn-segment" data-subpill="solid">Solid Dark</button>
+                  <button class="btn-segment" data-subpill="none">No Pill</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Custom Presets Vault -->
+            <div class="card-section">
+              <div class="section-header">
+                <h3>Custom Presets Vault</h3>
+                <button id="saveCurrentPresetBtn" class="btn btn-primary btn-sm">+ Save Preset</button>
+              </div>
+              <div id="savedPresetsList" class="saved-presets-list"></div>
+            </div>
+          </div>
+
+          <!-- TAB 6: BATCH VIDEO FACTORY -->
+          <div id="batch-tab" class="tab-pane">
+            <!-- 1. Batch PNG Upload -->
+            <div class="card-section">
+              <div class="section-header">
+                <h3>📦 Batch PNG Upload</h3>
+                <span class="badge-accent" id="batchPngCountBadge">0 Images</span>
+              </div>
+              <p class="section-desc">Upload 100-150+ transparent PNG images at once. Each PNG = 1 unique video. No repeats!</p>
+
+              <div class="upload-dropzone batch-dropzone" id="batchPngDropzone">
+                <input type="file" id="batchPngInput" accept="image/png,image/webp,image/svg+xml" multiple class="file-input">
+                <div class="dropzone-content">
+                  <div class="upload-icon" style="font-size: 2.5rem;">📥</div>
+                  <p class="upload-title">Drop Multiple PNG Files Here</p>
+                  <p class="upload-sub">Select 100-150+ transparent PNGs at once (No Limit!)</p>
+                </div>
+              </div>
+
+              <!-- Batch PNG List Preview -->
+              <div id="batchPngListWrap" class="batch-list-wrap" style="display: none;">
+                <div class="batch-list-header">
+                  <span>📋 Uploaded Images:</span>
+                  <button class="btn btn-ghost btn-sm" id="clearBatchPngsBtn">✕ Clear All</button>
+                </div>
+                <div id="batchPngGrid" class="batch-png-grid"></div>
+              </div>
+            </div>
+
+            <!-- 2. Batch Audio Upload -->
+            <div class="card-section">
+              <div class="section-header">
+                <h3>🎵 Batch Audio Pool</h3>
+                <span class="badge-accent" id="batchAudioCountBadge">0 Tracks</span>
+              </div>
+              <p class="section-desc">Upload 5-7 audio files. Each video will get a random audio from this pool. Leave empty to use current preset audio.</p>
+
+              <div class="upload-dropzone batch-dropzone" id="batchAudioDropzone">
+                <input type="file" id="batchAudioInput" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac" multiple class="file-input">
+                <div class="dropzone-content">
+                  <div class="upload-icon" style="font-size: 2.5rem;">🎶</div>
+                  <p class="upload-title">Drop Multiple Audio Files Here</p>
+                  <p class="upload-sub">MP3, WAV, AAC, M4A — Random pick for each video</p>
+                </div>
+              </div>
+
+              <!-- Batch Audio List -->
+              <div id="batchAudioListWrap" class="batch-list-wrap" style="display: none;">
+                <div class="batch-list-header">
+                  <span>🎵 Audio Pool:</span>
+                  <button class="btn btn-ghost btn-sm" id="clearBatchAudiosBtn">✕ Clear All</button>
+                </div>
+                <div id="batchAudioList" class="batch-audio-list"></div>
+              </div>
+            </div>
+
+            <!-- 3. Batch Export Settings -->
+            <div class="card-section">
+              <div class="section-header">
+                <h3>⚙️ Batch Export Settings</h3>
+                <span class="badge-accent">Factory Mode</span>
+              </div>
+
+              <div class="batch-info-banner">
+                <div class="batch-info-icon">🏭</div>
+                <div class="batch-info-text">
+                  <strong>How it works:</strong>
+                  <ul>
+                    <li>Same animation, background, text & outline settings for ALL videos</li>
+                    <li>Each PNG creates 1 unique video — no PNG repeats</li>
+                    <li>Audio is randomly picked from your audio pool</li>
+                    <li>All videos auto-download one by one</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="batch-stats-bar" id="batchStatsBar">
+                <div class="batch-stat">
+                  <span class="batch-stat-num" id="batchStatPngs">0</span>
+                  <span class="batch-stat-label">Images</span>
+                </div>
+                <div class="batch-stat">
+                  <span class="batch-stat-num" id="batchStatAudios">0</span>
+                  <span class="batch-stat-label">Audios</span>
+                </div>
+                <div class="batch-stat">
+                  <span class="batch-stat-num" id="batchStatVideos">0</span>
+                  <span class="batch-stat-label">Videos</span>
+                </div>
+                <div class="batch-stat">
+                  <span class="batch-stat-num" id="batchStatETA">~0m</span>
+                  <span class="batch-stat-label">Est. Time</span>
+                </div>
+              </div>
+
+              <button class="btn btn-primary btn-lg batch-start-btn" id="startBatchExportBtn" disabled>
+                <span class="icon">🏭</span>
+                <span id="startBatchExportText">Upload PNGs to Start Batch Export</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- CENTER PREVIEW MONITOR & CANVAS ARENA -->
+      <main class="preview-panel">
+        <!-- Monitor Toolbar -->
+        <div class="canvas-toolbar">
+          <div class="ratio-selectors">
+            <span class="toolbar-label">Monitor Aspect:</span>
+            <button class="btn-ratio active" data-ratio="9:16" data-w="1080" data-h="1920">📱 9:16 Shorts/Reels</button>
+            <button class="btn-ratio" data-ratio="1:1" data-w="1080" data-h="1080">⬛ 1:1 Post</button>
+            <button class="btn-ratio" data-ratio="16:9" data-w="1920" data-h="1080">🖥️ 16:9 Cinema</button>
+          </div>
+
+          <div class="monitor-stats">
+            <span class="stat-pill">60.00 FPS</span>
+            <span class="stat-pill">REC READY</span>
+          </div>
+        </div>
+
+        <!-- Canvas Viewport Frame -->
+        <div class="canvas-viewport" id="canvasViewport">
+          <div class="canvas-frame aspect-9-16" id="canvasFrame">
+            <canvas id="mainCanvas"></canvas>
+
+            <!-- Hit Flash Effect -->
+            <div class="match-flash" id="matchFlash"></div>
+
+            <!-- Score Popup Overlay -->
+            <div class="challenge-score-card" id="challengeScoreCard" style="display: none;">
+              <div class="score-stars" id="scoreStars">⭐⭐⭐⭐⭐</div>
+              <div class="score-val" id="scoreVal">98.4%</div>
+              <div class="score-title" id="scoreTitle">INSANE PERFECT MATCH! 🔥</div>
+              <p class="score-desc" id="scoreDesc">God-level timing! All objects locked in!</p>
+              <div class="multi-score-breakdown" id="multiScoreBreakdown" style="display: none;"></div>
+              <button class="btn btn-primary btn-sm mt-3" id="retryChallengeBtn">Play Again (Space)</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sleek Minimal Player Bar -->
+        <div class="simple-player-bar">
+          <div class="player-controls-left">
+            <button id="restartBtn" class="btn btn-ghost btn-sm" title="Restart (0.0s)">🔄</button>
+            <button id="stepBackBtn" class="btn btn-ghost btn-sm" title="Step Frame Back (1/60s)">⏮️</button>
+            <button id="playToggleBtn" class="btn btn-secondary btn-sm">
+              <span id="playIcon">⏸️</span>
+              <span id="playText">Pause</span>
+            </button>
+            <button id="stepForwardBtn" class="btn btn-ghost btn-sm" title="Step Frame Forward (1/60s)">⏭️</button>
+          </div>
+
+          <!-- Interactive Time Scrubber -->
+          <div class="player-scrubber-wrap" id="timelineScrubberArea" title="Click or drag to scrub time">
+            <div class="player-scrubber-track">
+              <div class="player-scrubber-fill" id="playheadFill"></div>
+              <div class="player-scrubber-thumb" id="playheadLine"></div>
+            </div>
+          </div>
+
+          <!-- Timecode & Audio -->
+          <div class="player-controls-right">
+            <div class="simple-timecode">
+              <span id="tcCurrent" class="tc-current">00:00.00</span>
+              <span class="tc-divider">/</span>
+              <span id="tcTotal" class="tc-total">00:10.00</span>
+            </div>
+            <button id="previewAudioBtn" class="btn btn-ghost btn-sm" title="Toggle Audio Sound">🔊</button>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       4. EXPORT QUALITY & SMOOTHNESS MODAL
+       ========================================================================= -->
+  <div class="export-modal" id="exportSettingsModal" style="display: none;">
+    <div class="export-modal-dialog">
+      <div class="export-dialog-header">
+        <div class="export-header-title-wrap">
+          <div class="export-header-icon">🎬</div>
+          <div>
+            <h2>Render & Export Video <span class="badge-accent" style="margin-left:6px;">60 FPS PRO</span></h2>
+            <p>Natively rendered with Multi-Threaded FFmpeg H.264 & Zero Frame Drops</p>
+          </div>
+        </div>
+        <button class="close-modal-btn" id="closeExportSettingsBtn">✕</button>
+      </div>
+
+      <div class="export-dialog-body">
+        <div class="export-section-group">
+          <label class="group-label">1. Video Quality / Resolution:</label>
+          <div class="export-cards-grid" id="resolutionCards">
+            <div class="export-option-card active" data-res="4k">
+              <div class="card-badge gold">4K ⚡ 60 FPS</div>
+              <div class="card-title">4K Ultra HD</div>
+              <div class="card-sub" id="res4kSub">2160 x 3840 px</div>
+              <div class="card-desc">Crystal clear 60 FPS ultra-sharp for YouTube Shorts & Reels</div>
+            </div>
+
+            <div class="export-option-card" data-res="2k">
+              <div class="card-badge cyan">2K ⚡ 60 FPS</div>
+              <div class="card-title">2K Quad HD</div>
+              <div class="card-sub" id="res2kSub">1440 x 2560 px</div>
+              <div class="card-desc">Super high fidelity 60 FPS with fast rendering</div>
+            </div>
+
+            <div class="export-option-card" data-res="1080p">
+              <div class="card-badge green">1080p ⚡ 60 FPS</div>
+              <div class="card-title">1080p Full HD</div>
+              <div class="card-sub" id="res1080Sub">1080 x 1920 px</div>
+              <div class="card-desc">Crisp standard 60 FPS for all social platforms</div>
+            </div>
+
+            <div class="export-option-card" data-res="720p">
+              <div class="card-badge">720p ⚡ 60 FPS</div>
+              <div class="card-title">720p HD</div>
+              <div class="card-sub" id="res720Sub">720 x 1280 px</div>
+              <div class="card-desc">Lightweight 60 FPS file for quick sharing</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="export-section-group">
+          <label class="group-label">2. Video Format:</label>
+          <div class="export-cards-grid grid-2" id="formatCards">
+            <div class="export-option-card active" data-format="mp4">
+              <div class="card-badge green">UNIVERSAL</div>
+              <div class="card-title">MP4 (H.264 / AVC)</div>
+              <div class="card-desc">Best for YouTube Shorts, Instagram Reels & TikTok</div>
+            </div>
+
+            <div class="export-option-card" data-format="webm">
+              <div class="card-badge">FAST</div>
+              <div class="card-title">WebM (VP9)</div>
+              <div class="card-desc">High compression web format</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="export-dialog-footer">
+        <button class="btn btn-ghost" id="cancelExportSettingsBtn">Cancel</button>
+        <button class="btn btn-primary btn-lg" id="startSmoothExportBtn">
+          <span class="icon">🚀</span>
+          <span id="startExportBtnText">Start 4K 60FPS MP4 Export 🚀</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROGRESS / SUCCESS MODAL -->
+  <div class="export-progress-modal" id="exportProgressModal" style="display: none;">
+    <div class="export-progress-card">
+      <div id="exportProgressState">
+        <div class="progress-spinner"></div>
+        <h3 id="exportProgressTitle">Rendering 4K 60FPS MP4 Video...</h3>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Rendering every frame with 100% Zero-Drop Pipeline...</p>
+
+        <div class="export-progress-bar-wrap">
+          <div class="export-progress-fill" id="exportProgressFill"></div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+          <span class="frame-counter-badge" id="frameCounterBadge">Frame 0 / 600</span>
+          <span style="font-family: var(--font-display); font-weight: 800; color: #ffe600;" id="exportProgressPercent">0%</span>
+        </div>
+
+        <button class="btn btn-ghost btn-sm mt-3" id="cancelExportProcessBtn">Cancel Export</button>
+      </div>
+
+      <!-- SUCCESS VIEW -->
+      <div id="exportSuccessState" style="display: none;">
+        <div style="font-size: 2.5rem; margin-bottom: 6px;">🎉</div>
+        <h3 style="color: var(--accent-green);">Video Export Complete!</h3>
+        <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;" id="exportSuccessDetails">Your 4K 60FPS video has been downloaded!</p>
+
+        <div style="display: flex; gap: 8px; justify-content: center; margin-top: 18px;">
+          <a id="directDownloadLink" class="btn btn-primary btn-sm" download>⬇️ Download MP4 File</a>
+          <button class="btn btn-secondary btn-sm" id="closeExportSuccessBtn">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BATCH EXPORT PROGRESS MODAL -->
+  <div class="batch-progress-modal" id="batchProgressModal" style="display: none;">
+    <div class="batch-progress-card">
+      <div id="batchProgressState">
+        <div class="batch-progress-header">
+          <div class="progress-spinner"></div>
+          <h3 id="batchProgressTitle">🏭 Batch Video Factory Running...</h3>
+        </div>
+        <p class="batch-progress-subtitle" id="batchProgressSubtitle">Generating videos with unique PNGs and random audio...</p>
+
+        <!-- Overall Progress -->
+        <div class="batch-overall-section">
+          <div class="batch-overall-label">
+            <span>Overall Progress:</span>
+            <span id="batchOverallText">0 / 0 Videos</span>
+          </div>
+          <div class="export-progress-bar-wrap">
+            <div class="export-progress-fill batch-overall-fill" id="batchOverallFill"></div>
+          </div>
+        </div>
+
+        <!-- Current Video Progress -->
+        <div class="batch-current-section">
+          <div class="batch-current-label">
+            <span id="batchCurrentName">🖼️ Current: --</span>
+            <span id="batchCurrentPercent">0%</span>
+          </div>
+          <div class="export-progress-bar-wrap">
+            <div class="export-progress-fill batch-current-fill" id="batchCurrentFill"></div>
+          </div>
+          <div class="batch-current-details">
+            <span class="frame-counter-badge" id="batchFrameCounter">Frame 0 / 0</span>
+            <span class="batch-audio-tag" id="batchCurrentAudio">🎵 --</span>
+          </div>
+        </div>
+
+        <!-- Batch Log -->
+        <div class="batch-log-section">
+          <div class="batch-log-header">📋 Export Log:</div>
+          <div class="batch-log-list" id="batchLogList"></div>
+        </div>
+
+        <button class="btn btn-ghost btn-sm mt-3" id="cancelBatchExportBtn">⛔ Cancel Batch Export</button>
+      </div>
+
+      <!-- BATCH COMPLETE VIEW -->
+      <div id="batchSuccessState" style="display: none;">
+        <div style="font-size: 3rem; margin-bottom: 8px;">🎉</div>
+        <h3 style="color: var(--accent-green);">Batch Export Complete!</h3>
+        <p class="batch-success-details" id="batchSuccessDetails">All videos have been generated and downloaded!</p>
+        <div class="batch-success-stats" id="batchSuccessStats"></div>
+        <button class="btn btn-secondary btn-sm mt-3" id="closeBatchSuccessBtn">Done ✓</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOCAL SCRIPTS (100% SELF-CONTAINED) -->
+  <script src="js/libs/mp4-muxer.js"></script>
+  <script src="js/presets.js"></script>
+  <script src="js/outlineGenerator.js"></script>
+  <script src="js/animations.js"></script>
+  <script src="js/audioManager.js"></script>
+  <script src="js/videoRecorder.js"></script>
+  <script src="js/canvasEngine.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(err => {
+          console.log('SW registration note:', err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>

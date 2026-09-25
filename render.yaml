@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: stop-challenge-studio
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /api/status
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000

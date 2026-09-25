@@ -1,0 +1,30 @@
+{
+  "name": "stop-challenge-studio",
+  "version": "2.0.0",
+  "description": "Stop Challenge 4K 60FPS Video Studio & Telegram Bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "bot": "node bot.js",
+    "server": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "stop-challenge",
+    "video-maker",
+    "telegram-bot",
+    "4k-60fps",
+    "webcodecs",
+    "render-deploy"
+  ],
+  "author": "Antigravity",
+  "license": "ISC",
+  "dependencies": {
+    "adm-zip": "^0.6.1",
+    "dotenv": "^18.0.3",
+    "mp4-muxer": "^5.2.2",
+    "node-telegram-bot-api": "^0.66.0"
+  }
+}

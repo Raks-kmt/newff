@@ -1,0 +1,12 @@
+/* Canvas Toolbar & Export Settings */
+.export-settings-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.select-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}

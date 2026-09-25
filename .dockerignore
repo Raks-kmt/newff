@@ -1,0 +1,13 @@
+node_modules
+npm-debug.log
+.env
+.git
+.gitignore
+exports/*
+!exports/.gitkeep
+temp/*
+!temp/.gitkeep
+*.bat
+*.vbs
+scratch/
+.system_generated/
