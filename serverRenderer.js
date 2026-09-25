@@ -70,6 +70,10 @@ class ServerRenderer {
 
     const workerUrl = `${this.serverUrl}/render-worker.html`;
 
+    const userDataDir = process.platform === 'win32'
+      ? path.join(__dirname, 'temp', 'chrome_prof')
+      : `/tmp/chrome_prof_${Date.now()}`;
+
     const chromeArgs = [
       '--headless=new',
       `--remote-debugging-port=${this.port}`,
@@ -85,6 +89,7 @@ class ServerRenderer {
       '--no-default-browser-check',
       '--enable-features=WebCodecs',
       '--mute-audio',
+      `--user-data-dir=${userDataDir}`,
       workerUrl
     ];
 
@@ -102,12 +107,13 @@ class ServerRenderer {
     this.chromeProcess.on('exit', (code) => {
       console.log(`[RENDERER] Headless Chrome process exited with code ${code}`);
       this.isReady = false;
+      global.__rendererReady = false;
       this.ws = null;
     });
 
     // Wait for CDP port
     let connected = false;
-    for (let attempt = 0; attempt < 30; attempt++) {
+    for (let attempt = 0; attempt < 35; attempt++) {
       await new Promise(r => setTimeout(r, 600));
       try {
         let res = null;
@@ -121,8 +127,17 @@ class ServerRenderer {
         if (!res || !res.ok) continue;
 
         const targets = await res.json();
-        const workerTarget = targets.find(t => t.url && t.url.includes('render-worker.html')) ||
+        let workerTarget = targets.find(t => t.url && t.url.includes('render-worker.html')) ||
           targets.find(t => t.type === 'page');
+
+        if (!workerTarget) {
+          try {
+            const newRes = await fetch(`http://127.0.0.1:${this.port}/json/new?${encodeURIComponent(workerUrl)}`, { method: 'PUT' });
+            if (newRes.ok) {
+              workerTarget = await newRes.json();
+            }
+          } catch(eNew) {}
+        }
 
         if (workerTarget && workerTarget.webSocketDebuggerUrl) {
           await this.connectWs(workerTarget.webSocketDebuggerUrl);
@@ -149,6 +164,7 @@ class ServerRenderer {
     // Wait 2s for scripts to initialize
     await new Promise(r => setTimeout(r, 2000));
     this.isReady = true;
+    global.__rendererReady = true;
   }
 
   connectWs(wsUrl) {

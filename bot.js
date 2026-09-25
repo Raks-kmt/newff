@@ -566,7 +566,9 @@ async function sendOrUpdateBgPreview(chatId, bgKey) {
   const prevKey = keys[(currentIndex - 1 + keys.length) % keys.length];
   const nextKey = keys[(currentIndex + 1) % keys.length];
 
-  const previewFile = path.join(__dirname, 'temp', 'bg_previews', `${currentKey}.jpg`);
+  const assetFile = path.join(__dirname, 'assets', 'bg_previews', `${currentKey}.jpg`);
+  const tempFile = path.join(__dirname, 'temp', 'bg_previews', `${currentKey}.jpg`);
+  const previewFile = fs.existsSync(assetFile) ? assetFile : tempFile;
   const isCurrentActive = session.bgGradient === currentKey;
 
   const caption = `🎨 *Background Visual Preview*\n\n` +

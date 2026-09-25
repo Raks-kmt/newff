@@ -55,6 +55,7 @@ const server = http.createServer((req, res) => {
       status: 'online',
       uptime: process.uptime(),
       platform: process.platform,
+      rendererReady: global.__rendererReady || false,
       exportsDir: EXPORTS_DIR
     }));
     return;
