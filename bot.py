@@ -63,8 +63,8 @@ def get_default_session():
         'motion_type': 'spin',
         'speed': 1.0,
         'duration': 3.0,
-        'fps': 60,
-        'resolution': '720p',
+        'fps': 30,
+        'resolution': 'turbo_4k',
         'aspect_ratio': '9:16',
         'bg_gradient': 'cyberpunk',
         'header_text': 'CAN YOU STOP THIS? 🛑',
@@ -375,7 +375,7 @@ def get_settings_summary_text(session):
         f"🎨 *Background*: `{renderer.BG_PRESETS_LABELS.get(session.get('bg_gradient', 'cyberpunk'), 'Cyberpunk')}`\n"
         f"✨ *Particles*: `{'ON' if session.get('show_sparkles', True) else 'OFF'}` (`{session.get('particle_count', 90)} pts`)\n"
         f"🎵 *Audio*: `{audio_info}`\n"
-        f"📺 *Output*: `60 FPS` • `{session.get('resolution', '720p').upper()}` • `{session.get('aspect_ratio', '9:16')}`\n\n"
+        f"📺 *Output*: `{session.get('fps', 30)} FPS` • `{session.get('resolution', 'turbo_4k').replace('_', ' ').upper()}` • `{session.get('aspect_ratio', '9:16')}`\n\n"
         f"💡 _Tap any button to customize, or send a photo/ZIP to render!_"
     )
 
@@ -800,33 +800,42 @@ def handle_callbacks(call):
         save_sessions()
         return bot.answer_callback_query(call.id, text="Audio pool cleared!")
 
-    # 7. Resolution & Duration
+    # 7. Resolution & Framerate
     if data == 'menu:resolution':
-        ram_mb = renderer.get_available_ram_mb()
-        cloud_note = ""
-        if ram_mb < 1024:
-            cloud_note = "\n\n⚠️ _Cloud server has limited RAM. 2K/4K will auto-downgrade to 1080p to prevent crashes._"
-        
+        cur_res = session.get('resolution', 'turbo_4k')
+        cur_fps = session.get('fps', 30)
+        cur_ar = session.get('aspect_ratio', '9:16')
+
         kb = types.InlineKeyboardMarkup(row_width=2)
         kb.add(
-            types.InlineKeyboardButton("📱 720p (Fastest)", callback_data="set:res:720p"),
-            types.InlineKeyboardButton("🎬 1080p (FHD)", callback_data="set:res:1080p"),
-            types.InlineKeyboardButton("💎 2K (1440p)", callback_data="set:res:2k"),
-            types.InlineKeyboardButton("👑 4K (2160p)", callback_data="set:res:4k")
+            types.InlineKeyboardButton(f"🚀 Turbo 4K (15s Fast) {'✅' if cur_res == 'turbo_4k' else ''}", callback_data="set:res:turbo_4k"),
+            types.InlineKeyboardButton(f"👑 Native 4K (Studio) {'✅' if cur_res == '4k' else ''}", callback_data="set:res:4k"),
+            types.InlineKeyboardButton(f"🎬 1080p (FHD) {'✅' if cur_res == '1080p' else ''}", callback_data="set:res:1080p"),
+            types.InlineKeyboardButton(f"📱 720p (Fastest) {'✅' if cur_res == '720p' else ''}", callback_data="set:res:720p")
         )
         kb.add(
-            types.InlineKeyboardButton("📱 9:16 (Shorts/Reels)", callback_data="set:ar:9:16"),
-            types.InlineKeyboardButton("🔲 1:1 (Square)", callback_data="set:ar:1:1")
+            types.InlineKeyboardButton(f"⚡ 30 FPS (2x Speed) {'✅' if cur_fps == 30 else ''}", callback_data="set:fps:30"),
+            types.InlineKeyboardButton(f"🎬 60 FPS (Smooth) {'✅' if cur_fps == 60 else ''}", callback_data="set:fps:60")
+        )
+        kb.add(
+            types.InlineKeyboardButton(f"📱 9:16 (Shorts/Reels) {'✅' if cur_ar == '9:16' else ''}", callback_data="set:ar:9:16"),
+            types.InlineKeyboardButton(f"🔲 1:1 (Square) {'✅' if cur_ar == '1:1' else ''}", callback_data="set:ar:1:1")
         )
         kb.add(types.InlineKeyboardButton('« Back to Settings', callback_data='menu:main'))
-        
+
         bot.edit_message_text(
-            f"📺 *Output Video Resolution & Aspect Ratio*:\n"
-            f"Current: *{session.get('resolution', '720p').upper()}* • *{session.get('aspect_ratio', '9:16')}*"
-            f"{cloud_note}",
+            f"📺 *Output Video Resolution & Framerate*:\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"• **Resolution**: `{cur_res.replace('_', ' ').upper()}`\n"
+            f"• **Framerate**: `{cur_fps} FPS`\n"
+            f"• **Aspect Ratio**: `{cur_ar}`\n\n"
+            f"⚡ *Fast 4K Rendering Secret*:\n"
+            f"• **🚀 Turbo 4K**: High-speed FHD generation + 4K Lanczos upscale (Renders in **10-15s**!)\n"
+            f"• **⚡ 30 FPS**: Standard for YouTube Shorts/Reels & renders **2x faster** than 60 FPS!",
             chat_id=chat_id,
             message_id=message_id,
-            reply_markup=kb
+            reply_markup=kb,
+            parse_mode='Markdown'
         )
         return bot.answer_callback_query(call.id)
 
@@ -834,15 +843,76 @@ def handle_callbacks(call):
         res = data.replace('set:res:', '')
         session['resolution'] = res
         save_sessions()
-        note = ""
-        if res in ('4k', '2k') and renderer.get_available_ram_mb() < 1024:
-            note = " (will auto-fit to server RAM)"
-        return bot.answer_callback_query(call.id, text=f"Resolution: {res.upper()}{note}")
+        name = "Turbo 4K (Fast)" if res == 'turbo_4k' else res.upper()
+        cur_fps = session.get('fps', 30)
+        cur_ar = session.get('aspect_ratio', '9:16')
+        kb = types.InlineKeyboardMarkup(row_width=2)
+        kb.add(
+            types.InlineKeyboardButton(f"🚀 Turbo 4K (15s Fast) {'✅' if res == 'turbo_4k' else ''}", callback_data="set:res:turbo_4k"),
+            types.InlineKeyboardButton(f"👑 Native 4K (Studio) {'✅' if res == '4k' else ''}", callback_data="set:res:4k"),
+            types.InlineKeyboardButton(f"🎬 1080p (FHD) {'✅' if res == '1080p' else ''}", callback_data="set:res:1080p"),
+            types.InlineKeyboardButton(f"📱 720p (Fastest) {'✅' if res == '720p' else ''}", callback_data="set:res:720p")
+        )
+        kb.add(
+            types.InlineKeyboardButton(f"⚡ 30 FPS (2x Speed) {'✅' if cur_fps == 30 else ''}", callback_data="set:fps:30"),
+            types.InlineKeyboardButton(f"🎬 60 FPS (Smooth) {'✅' if cur_fps == 60 else ''}", callback_data="set:fps:60")
+        )
+        kb.add(
+            types.InlineKeyboardButton(f"📱 9:16 (Shorts/Reels) {'✅' if cur_ar == '9:16' else ''}", callback_data="set:ar:9:16"),
+            types.InlineKeyboardButton(f"🔲 1:1 (Square) {'✅' if cur_ar == '1:1' else ''}", callback_data="set:ar:1:1")
+        )
+        kb.add(types.InlineKeyboardButton('« Back to Settings', callback_data='menu:main'))
+        bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=kb)
+        return bot.answer_callback_query(call.id, text=f"✅ Resolution: {name}")
+
+    if data.startswith('set:fps:'):
+        f = int(data.replace('set:fps:', ''))
+        session['fps'] = f
+        save_sessions()
+        cur_res = session.get('resolution', 'turbo_4k')
+        cur_ar = session.get('aspect_ratio', '9:16')
+        kb = types.InlineKeyboardMarkup(row_width=2)
+        kb.add(
+            types.InlineKeyboardButton(f"🚀 Turbo 4K (15s Fast) {'✅' if cur_res == 'turbo_4k' else ''}", callback_data="set:res:turbo_4k"),
+            types.InlineKeyboardButton(f"👑 Native 4K (Studio) {'✅' if cur_res == '4k' else ''}", callback_data="set:res:4k"),
+            types.InlineKeyboardButton(f"🎬 1080p (FHD) {'✅' if cur_res == '1080p' else ''}", callback_data="set:res:1080p"),
+            types.InlineKeyboardButton(f"📱 720p (Fastest) {'✅' if cur_res == '720p' else ''}", callback_data="set:res:720p")
+        )
+        kb.add(
+            types.InlineKeyboardButton(f"⚡ 30 FPS (2x Speed) {'✅' if f == 30 else ''}", callback_data="set:fps:30"),
+            types.InlineKeyboardButton(f"🎬 60 FPS (Smooth) {'✅' if f == 60 else ''}", callback_data="set:fps:60")
+        )
+        kb.add(
+            types.InlineKeyboardButton(f"📱 9:16 (Shorts/Reels) {'✅' if cur_ar == '9:16' else ''}", callback_data="set:ar:9:16"),
+            types.InlineKeyboardButton(f"🔲 1:1 (Square) {'✅' if cur_ar == '1:1' else ''}", callback_data="set:ar:1:1")
+        )
+        kb.add(types.InlineKeyboardButton('« Back to Settings', callback_data='menu:main'))
+        bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=kb)
+        return bot.answer_callback_query(call.id, text=f"⚡ Framerate: {f} FPS")
 
     if data.startswith('set:ar:'):
         ar = data.replace('set:ar:', '')
         session['aspect_ratio'] = ar
         save_sessions()
+        cur_res = session.get('resolution', 'turbo_4k')
+        cur_fps = session.get('fps', 30)
+        kb = types.InlineKeyboardMarkup(row_width=2)
+        kb.add(
+            types.InlineKeyboardButton(f"🚀 Turbo 4K (15s Fast) {'✅' if cur_res == 'turbo_4k' else ''}", callback_data="set:res:turbo_4k"),
+            types.InlineKeyboardButton(f"👑 Native 4K (Studio) {'✅' if cur_res == '4k' else ''}", callback_data="set:res:4k"),
+            types.InlineKeyboardButton(f"🎬 1080p (FHD) {'✅' if cur_res == '1080p' else ''}", callback_data="set:res:1080p"),
+            types.InlineKeyboardButton(f"📱 720p (Fastest) {'✅' if cur_res == '720p' else ''}", callback_data="set:res:720p")
+        )
+        kb.add(
+            types.InlineKeyboardButton(f"⚡ 30 FPS (2x Speed) {'✅' if cur_fps == 30 else ''}", callback_data="set:fps:30"),
+            types.InlineKeyboardButton(f"🎬 60 FPS (Smooth) {'✅' if cur_fps == 60 else ''}", callback_data="set:fps:60")
+        )
+        kb.add(
+            types.InlineKeyboardButton(f"📱 9:16 (Shorts/Reels) {'✅' if ar == '9:16' else ''}", callback_data="set:ar:9:16"),
+            types.InlineKeyboardButton(f"🔲 1:1 (Square) {'✅' if ar == '1:1' else ''}", callback_data="set:ar:1:1")
+        )
+        kb.add(types.InlineKeyboardButton('« Back to Settings', callback_data='menu:main'))
+        bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=kb)
         return bot.answer_callback_query(call.id, text=f"Aspect Ratio: {ar}")
 
     if data == 'menu:duration':
@@ -935,16 +1005,19 @@ def handle_single_image(chat_id, file_id, original_name="ChallengeItem"):
                 video_duration = det_dur
                 print(f"[BOT] Video duration matched to audio track: {video_duration}s")
 
+        cur_fps = session.get('fps', 30)
+        cur_res = session.get('resolution', 'turbo_4k')
+
         # Stage 3: Render
-        tracker.set_stage(3, '🎬 Rendering 60 FPS')
+        tracker.set_stage(3, f'🎬 Rendering {cur_fps} FPS')
 
         config = {
             'image': img,
             'motion_type': session.get('motion_type', 'spin'),
             'speed': session.get('speed', 1.0),
             'duration': video_duration,
-            'fps': session.get('fps', 60),
-            'resolution': session.get('resolution', '720p'),
+            'fps': cur_fps,
+            'resolution': cur_res,
             'aspect_ratio': session.get('aspect_ratio', '9:16'),
             'bg_gradient': session.get('bg_gradient', 'cyberpunk'),
             'header_text': get_clean_header(session.get('header_text', 'CAN YOU STOP THIS?')),
@@ -978,8 +1051,8 @@ def handle_single_image(chat_id, file_id, original_name="ChallengeItem"):
             f"━━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"📁 *File*: `{result['filename']}`\n"
             f"📦 *Size*: `{size_mb:.1f} MB`\n"
-            f"⏱️ *Duration*: `{result['duration']}s` @ `60 FPS`\n"
-            f"📺 *Resolution*: `{session.get('resolution', '720p').upper()}` • `{session.get('aspect_ratio', '9:16')}`\n"
+            f"⏱️ *Duration*: `{result['duration']}s` @ `{cur_fps} FPS`\n"
+            f"📺 *Resolution*: `{cur_res.replace('_', ' ').upper()}` • `{session.get('aspect_ratio', '9:16')}`\n"
             f"🎨 *Background*: `{renderer.BG_PRESETS_LABELS.get(session.get('bg_gradient', 'cyberpunk'), 'cyberpunk')}`\n"
             f"🎵 *Audio*: `{'Attached ✅' if chosen_audio else 'Silent'}`\n"
             f"⚡ *Rendered in*: `{fmt_time(total_time)}`\n\n"
@@ -1202,8 +1275,8 @@ def handle_batch_zip(chat_id, file_id, zip_name="batch.zip"):
                     'motion_type': session.get('motion_type', 'spin'),
                     'speed': session.get('speed', 1.0),
                     'duration': item_duration,
-                    'fps': session.get('fps', 60),
-                    'resolution': session.get('resolution', '720p'),
+                    'fps': session.get('fps', 30),
+                    'resolution': session.get('resolution', 'turbo_4k'),
                     'aspect_ratio': session.get('aspect_ratio', '9:16'),
                     'bg_gradient': session.get('bg_gradient', 'cyberpunk'),
                     'header_text': get_clean_header(session.get('header_text', 'CAN YOU STOP THIS?')),
@@ -1256,7 +1329,7 @@ def handle_batch_zip(chat_id, file_id, zip_name="batch.zip"):
             f"📁 *Videos*: `{len(rendered_videos)}/{total_count}` rendered\n"
             f"📦 *Size*: `{zip_size_mb:.1f} MB`\n"
             f"⏱️ *Total Time*: `{fmt_time(total_batch_time)}`\n\n"
-            f"⚙️ `60 FPS` • `{session.get('resolution', '720p').upper()}` • `{session.get('motion_type', 'spin').upper()}`\n"
+            f"⚙️ `{session.get('fps', 30)} FPS` • `{session.get('resolution', 'turbo_4k').replace('_', ' ').upper()}` • `{session.get('motion_type', 'spin').upper()}`\n"
             f"🎨 `{renderer.BG_PRESETS_LABELS.get(session.get('bg_gradient', 'cyberpunk'), 'cyberpunk')}`\n\n"
             f"🔥 {BOT_TAG}"
         )

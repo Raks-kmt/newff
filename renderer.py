@@ -169,6 +169,7 @@ BG_PRESETS_LABELS = {
 def get_target_dimensions(resolution='720p', aspect_ratio='9:16'):
     res_map = {
         '4k': {'9:16': (2160, 3840), '1:1': (2160, 2160), '16:9': (3840, 2160)},
+        'turbo_4k': {'9:16': (1080, 1920), '1:1': (1080, 1080), '16:9': (1920, 1080)},
         '2k': {'9:16': (1440, 2560), '1:1': (1440, 1440), '16:9': (2560, 1440)},
         '1080p': {'9:16': (1080, 1920), '1:1': (1080, 1080), '16:9': (1920, 1080)},
         '720p': {'9:16': (720, 1280), '1:1': (720, 720), '16:9': (1280, 720)}
@@ -754,6 +755,22 @@ def render_stop_challenge_video(config, on_progress=None):
     s_draw.text((s_box_x + s_padx + 1, s_box_y + s_pady + 1), sub_text, fill=(0, 0, 0, 220), font=font_sub)
     s_draw.text((s_box_x + s_padx, s_box_y + s_pady), sub_text, fill=(255, 255, 255, 250), font=font_sub)
 
+    # ⚡ PERFORMANCE OPTIMIZATION 1: Pre-bake static subtitle banner into bg_base
+    bg_base.paste(sub_canvas, (0, 0), sub_canvas)
+    del sub_canvas
+
+    # ⚡ PERFORMANCE OPTIMIZATION 2: Pre-bake static target indicator dot crosshair into bg_base
+    bg_draw = ImageDraw.Draw(bg_base)
+    bg_draw.ellipse(
+        [(target_x - 14, target_y - 14), (target_x + 14, target_y + 14)],
+        outline=(*outline_color, 90),
+        width=2
+    )
+    bg_draw.ellipse(
+        [(target_x - 4, target_y - 4), (target_x + 4, target_y + 4)],
+        fill=(*outline_color, 220)
+    )
+
     # C. Top-Left Countdown Timer Metrics
     timer_x = int(75 * scale)
     timer_y = int(80 * scale)
@@ -762,10 +779,34 @@ def render_stop_challenge_video(config, on_progress=None):
     # Initialize Floating Sparkles
     particles = init_particles(particle_count, width, height, particle_color) if show_sparkles else []
 
-    # 4. Setup FFmpeg Output Pipe
+    # 4. Setup FFmpeg Output Pipe with Hardware Acceleration & Turbo 4K Scaler
     total_frames = int(duration * fps)
     has_audio = bool(audio_path and os.path.exists(audio_path))
     temp_video_path = output_path + '.temp.mp4' if has_audio else output_path
+
+    is_turbo_4k = (str(resolution).lower() == 'turbo_4k')
+
+    # Detect NVIDIA NVENC GPU Hardware Acceleration
+    has_nvenc = False
+    try:
+        chk = subprocess.run(
+            ['ffmpeg', '-f', 'lavfi', '-i', 'nullsrc', '-c:v', 'h264_nvenc', '-t', '0.05', '-f', 'null', '-'],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1
+        )
+        if chk.returncode == 0:
+            has_nvenc = True
+            print("[RENDERER] 🚀 GPU Hardware Acceleration: NVIDIA NVENC Active!")
+    except Exception:
+        pass
+
+    vf_filters = []
+    if is_turbo_4k:
+        target_out_w, target_out_h = {
+            '9:16': (2160, 3840),
+            '1:1': (2160, 2160),
+            '16:9': (3840, 2160)
+        }.get(aspect_ratio, (2160, 3840))
+        vf_filters.append(f'scale={target_out_w}:{target_out_h}:flags=lanczos')
 
     ffmpeg_cmd = [
         'ffmpeg', '-y',
@@ -774,13 +815,31 @@ def render_stop_challenge_video(config, on_progress=None):
         '-s', f'{width}x{height}',
         '-pix_fmt', 'rgb24',
         '-r', str(fps),
-        '-i', '-',
-        '-c:v', 'libx264',
-        '-preset', 'veryfast',
-        '-crf', '18',
-        '-pix_fmt', 'yuv420p',
-        temp_video_path
+        '-i', '-'
     ]
+
+    if vf_filters:
+        ffmpeg_cmd.extend(['-vf', ','.join(vf_filters)])
+
+    if has_nvenc:
+        ffmpeg_cmd.extend([
+            '-c:v', 'h264_nvenc',
+            '-preset', 'p2',
+            '-tune', 'ull',
+            '-rc', 'constqp',
+            '-qp', '22',
+            '-pix_fmt', 'yuv420p',
+            temp_video_path
+        ])
+    else:
+        ffmpeg_cmd.extend([
+            '-c:v', 'libx264',
+            '-preset', 'ultrafast',
+            '-crf', '22',
+            '-threads', '0',
+            '-pix_fmt', 'yuv420p',
+            temp_video_path
+        ])
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
@@ -795,7 +854,11 @@ def render_stop_challenge_video(config, on_progress=None):
     ox = target_x - outline_base_img.width // 2
     oy = target_y - outline_base_img.height // 2
 
-    # 5. Deterministic 60 FPS Render Loop
+    # ⚡ PERFORMANCE OPTIMIZATION 3: Dynamic Caches for Pulsing Header and Outline
+    outline_cache = {}
+    header_cache = {}
+
+    # 5. High-Speed Render Loop
     last_reported_percent = -1
 
     for frame_idx in range(total_frames):
@@ -808,43 +871,36 @@ def render_stop_challenge_video(config, on_progress=None):
         if show_sparkles and particles:
             draw_particles(f_draw, particles, t, width, height, particle_speed)
 
-        # 5b. Stationary Outline: Rock-solid, razor-sharp & anti-aliased (Matching CanvasEngine line 687)
+        # 5b. Stationary Outline: Cached resizes for zero-cost pulsation
         if pulse_outline:
             pulse_factor = 1.0 + math.sin(t * 5.0) * 0.035
             cur_ow = max(10, int(outline_base_img.width * pulse_factor))
-            cur_oh = max(10, int(outline_base_img.height * pulse_factor))
-            cur_outline = outline_base_img.resize((cur_ow, cur_oh), Image.Resampling.BICUBIC)
+            if cur_ow not in outline_cache:
+                cur_oh = max(10, int(outline_base_img.height * pulse_factor))
+                outline_cache[cur_ow] = outline_base_img.resize((cur_ow, cur_oh), Image.Resampling.BILINEAR)
+            cur_outline = outline_cache[cur_ow]
             cur_ox = target_x - cur_outline.width // 2
             cur_oy = target_y - cur_outline.height // 2
             frame.paste(cur_outline, (cur_ox, cur_oy), cur_outline)
         else:
             frame.paste(outline_base_img, (ox, oy), outline_base_img)
 
-        # 5c. Target Center Indicator Dot (Cyan glowing crosshair)
-        f_draw.ellipse(
-            [(target_x - 14, target_y - 14), (target_x + 14, target_y + 14)],
-            outline=(*outline_color, 90),
-            width=2
-        )
-        f_draw.ellipse(
-            [(target_x - 4, target_y - 4), (target_x + 4, target_y + 4)],
-            fill=(*outline_color, 220)
-        )
+        # 5c. Target Center Indicator Dot is already baked into bg_base!
 
         # 5d. Compute Moving Item Transform
         cur_x, cur_y, cur_angle, cur_scale = compute_transform(
             t, motion_type, speed, width, height, target_x, target_y, 1.0
         )
 
-        if abs(cur_scale - 1.0) > 0.01:
+        if abs(cur_scale - 1.0) > 0.02:
             mw = max(4, int(resized_item.width * cur_scale))
             mh = max(4, int(resized_item.height * cur_scale))
-            moving_img = resized_item.resize((mw, mh), Image.Resampling.BICUBIC)
+            moving_img = resized_item.resize((mw, mh), Image.Resampling.BILINEAR)
         else:
             moving_img = resized_item
 
-        if abs(cur_angle) > 0.01:
-            rotated_item = moving_img.rotate(cur_angle, resample=Image.Resampling.BICUBIC, expand=True)
+        if abs(cur_angle) > 0.5:
+            rotated_item = moving_img.rotate(cur_angle, resample=Image.Resampling.BILINEAR, expand=True)
         else:
             rotated_item = moving_img
 
@@ -852,19 +908,20 @@ def render_stop_challenge_video(config, on_progress=None):
         my = int(cur_y - rotated_item.height // 2)
         frame.paste(rotated_item, (mx, my), rotated_item)
 
-        # 5e. Bottom Subtitle Pill Banner
-        frame.paste(sub_canvas, (0, 0), sub_canvas)
+        # 5e. Bottom Subtitle Pill Banner is already baked into bg_base!
 
-        # 5f. Top Pulsing Header Pill Banner (Exact match to canvasEngine line 794)
+        # 5f. Top Pulsing Header Pill Banner with instant caching
         header_pulse = 1.0 + math.sin(t * 6.0) * 0.045
         cur_hw = int(header_base_canvas.width * header_pulse)
-        cur_hh = int(header_base_canvas.height * header_pulse)
-        cur_header = header_base_canvas.resize((cur_hw, cur_hh), Image.Resampling.BICUBIC)
+        if cur_hw not in header_cache:
+            cur_hh = int(header_base_canvas.height * header_pulse)
+            header_cache[cur_hw] = (header_base_canvas.resize((cur_hw, cur_hh), Image.Resampling.BILINEAR), cur_hh)
+        cur_header, cur_hh = header_cache[cur_hw]
         ch_x = (width - cur_hw) // 2
         ch_y = h_box_y - (cur_hh - header_base_canvas.height) // 2
         frame.paste(cur_header, (ch_x, ch_y), cur_header)
 
-        # 5g. Top-Left Circular Countdown Timer (Exact match to canvasEngine line 1040)
+        # 5g. Top-Left Circular Countdown Timer
         f_draw.ellipse(
             [(timer_x - timer_r, timer_y - timer_r), (timer_x + timer_r, timer_y + timer_r)],
             fill=(0, 0, 0, 180),
