@@ -642,11 +642,12 @@ def render_stop_challenge_video(config, on_progress=None):
     width, height = get_target_dimensions(resolution, aspect_ratio)
     scale = width / 1080.0
 
-    # Smart FPS reduction for high resolutions to save memory & time
+    # Smart FPS reduction for high resolutions ONLY if low RAM (<4GB)
     pixel_count = width * height
-    if pixel_count > 2073600 and fps > 30:  # >1080p
+    avail_ram = get_available_ram_mb()
+    if pixel_count > 2073600 and fps > 30 and avail_ram < 4096:
         fps = 30
-        print(f"[RENDERER] FPS auto-reduced to 30 for {width}x{height} (memory safety)")
+        print(f"[RENDERER] FPS auto-reduced to 30 for {width}x{height} (low RAM: {avail_ram}MB)")
 
     # 1. Process image cutout cleanly using outer-border BFS flood fill
     processed_img = process_image_transparency(source_img)
@@ -683,8 +684,8 @@ def render_stop_challenge_video(config, on_progress=None):
     target_x = width // 2
     target_y = int(height * 0.53)
 
-    # Reduce particles on high-res to save CPU + memory
-    if pixel_count > 2073600:  # > 1080p
+    # Reduce particles on high-res ONLY if low RAM (<4GB)
+    if pixel_count > 2073600 and avail_ram < 4096:
         particle_count = min(particle_count, 40)
         outline_glow = min(outline_glow, 10)
 
