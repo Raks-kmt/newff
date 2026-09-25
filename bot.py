@@ -1408,10 +1408,15 @@ def on_document(message):
         )
 
 # -------------------------------------------------------------
-# DUAL HTTP SERVER FOR RENDER HEALTH CHECKS
+# DUAL-MODE SERVER: Webhook (Cloud Run) + Polling (Render/Local)
 # -------------------------------------------------------------
 
-class HealthCheckHandler(BaseHTTPRequestHandler):
+WEBHOOK_URL = os.getenv('WEBHOOK_URL', '')  # Set this on Cloud Run only
+DEPLOY_MODE = 'webhook' if WEBHOOK_URL else 'polling'
+
+class DualModeHandler(BaseHTTPRequestHandler):
+    """Handles both health checks AND Telegram webhook POSTs."""
+
     def do_GET(self):
         if self.path in ['/health', '/api/status', '/']:
             self.send_response(200)
@@ -1420,23 +1425,34 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
             resp = {
                 'status': 'online',
                 'engine': 'python-60fps-native',
+                'mode': DEPLOY_MODE,
                 'platform': sys.platform,
-                'exports': str(EXPORTS_DIR)
+                'ram_mb': renderer.get_available_ram_mb()
             }
             self.wfile.write(json.dumps(resp).encode('utf-8'))
         else:
             self.send_response(404)
             self.end_headers()
 
+    def do_POST(self):
+        if self.path == f'/webhook/{TOKEN}':
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length)
+            try:
+                update = telebot.types.Update.de_json(body.decode('utf-8'))
+                bot.process_new_updates([update])
+            except Exception as e:
+                print(f"[WEBHOOK ERROR] {e}")
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b'OK')
+        else:
+            self.send_response(404)
+            self.end_headers()
+
     def log_message(self, format, *args):
-        pass # suppress access log noise
-
-def start_http_server():
-    server = HTTPServer(('0.0.0.0', PORT), HealthCheckHandler)
-    print(f"[HTTP] Health Server running on 0.0.0.0:{PORT}")
-    server.serve_forever()
-
-threading.Thread(target=start_http_server, daemon=True).start()
+        pass  # suppress access log noise
 
 # -------------------------------------------------------------
 # MAIN START
@@ -1445,9 +1461,31 @@ threading.Thread(target=start_http_server, daemon=True).start()
 BOT_START_TIME = time.time()
 
 if __name__ == '__main__':
-    print(f"[BOT] {BOT_BRAND} is active and listening on port {PORT}!")
-    try:
-        bot.delete_webhook(drop_pending_updates=True)
-    except Exception as e:
-        print(f"[BOT] Webhook clear notice: {e}")
-    bot.infinity_polling(timeout=20, long_polling_timeout=20)
+    print(f"[BOT] {BOT_BRAND} is active | Mode: {DEPLOY_MODE} | Port: {PORT}")
+    print(f"[BOT] RAM Available: {renderer.get_available_ram_mb()} MB")
+
+    if DEPLOY_MODE == 'webhook':
+        # WEBHOOK MODE (Google Cloud Run)
+        webhook_path = f'/webhook/{TOKEN}'
+        full_url = f'{WEBHOOK_URL}{webhook_path}'
+        try:
+            bot.remove_webhook()
+            time.sleep(0.5)
+            bot.set_webhook(url=full_url)
+            print(f"[BOT] Webhook set: {WEBHOOK_URL}/webhook/***")
+        except Exception as e:
+            print(f"[BOT] Webhook setup error: {e}")
+
+        server = HTTPServer(('0.0.0.0', PORT), DualModeHandler)
+        print(f"[HTTP] Webhook Server running on 0.0.0.0:{PORT}")
+        server.serve_forever()
+    else:
+        # POLLING MODE (Render / Local Dev)
+        threading.Thread(target=lambda: HTTPServer(('0.0.0.0', PORT), DualModeHandler).serve_forever(), daemon=True).start()
+        print(f"[HTTP] Health Server running on 0.0.0.0:{PORT}")
+        try:
+            bot.delete_webhook(drop_pending_updates=True)
+        except Exception as e:
+            print(f"[BOT] Webhook clear notice: {e}")
+        bot.infinity_polling(timeout=20, long_polling_timeout=20)
+
