@@ -73,10 +73,11 @@ class ServerRenderer {
     const chromeArgs = [
       '--headless=new',
       `--remote-debugging-port=${this.port}`,
+      '--remote-debugging-address=0.0.0.0',
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
-      '--disable-gpu-sandbox',
+      '--disable-gpu',
       '--no-first-run',
       '--no-default-browser-check',
       '--enable-features=WebCodecs',
@@ -84,7 +85,16 @@ class ServerRenderer {
       workerUrl
     ];
 
-    this.chromeProcess = spawn(chromePath, chromeArgs, { stdio: 'ignore' });
+    this.chromeProcess = spawn(chromePath, chromeArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+
+    if (this.chromeProcess.stderr) {
+      this.chromeProcess.stderr.on('data', (d) => {
+        const line = d.toString().trim();
+        if (line && !line.includes('DevTools listening on')) {
+          console.log(`[CHROME]: ${line}`);
+        }
+      });
+    }
 
     this.chromeProcess.on('exit', (code) => {
       console.log(`[RENDERER] Headless Chrome process exited with code ${code}`);
@@ -94,15 +104,21 @@ class ServerRenderer {
 
     // Wait for CDP port
     let connected = false;
-    for (let attempt = 0; attempt < 20; attempt++) {
+    for (let attempt = 0; attempt < 30; attempt++) {
       await new Promise(r => setTimeout(r, 600));
       try {
         const res = await fetch(`http://127.0.0.1:${this.port}/json`);
         const targets = await res.json();
-        const workerTarget = targets.find(t => t.url && t.url.includes('render-worker.html'));
+        const workerTarget = targets.find(t => t.url && t.url.includes('render-worker.html')) ||
+          targets.find(t => t.type === 'page');
+
         if (workerTarget && workerTarget.webSocketDebuggerUrl) {
           await this.connectWs(workerTarget.webSocketDebuggerUrl);
           connected = true;
+          if (!workerTarget.url || !workerTarget.url.includes('render-worker.html')) {
+            console.log(`[RENDERER] Navigating target to: ${workerUrl}`);
+            await this.send('Page.navigate', { url: workerUrl });
+          }
           break;
         }
       } catch (e) {
