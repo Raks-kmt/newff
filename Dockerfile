@@ -1,38 +1,32 @@
 # =============================================================
-# STOP CHALLENGE 4K 60FPS STUDIO — DOCKERFILE FOR RENDER.COM
-# Uses Official Chromium, FFmpeg & Xvfb Virtual Framebuffer
+# STOP CHALLENGE 4K 60FPS STUDIO — 100% PYTHON DOCKERFILE
+# Ultra-lightweight, 100% reliable, zero Chromium/Xvfb overhead!
 # =============================================================
 
-FROM node:20-bookworm-slim
+FROM python:3.12-slim-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV PORT=10000
 
-# Install Chromium, FFmpeg, Unicode & Emoji Fonts, and Xvfb Virtual Display
+# Install FFmpeg and crisp Unicode fonts
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    chromium \
     ffmpeg \
     fonts-liberation \
-    fonts-noto-color-emoji \
+    fonts-dejavu \
     ca-certificates \
-    xvfb \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-ENV CHROME_PATH=/usr/bin/chromium
-ENV NODE_ENV=production
-ENV PORT=10000
-ENV DISPLAY=:99
-
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm ci --omit=dev || npm install --production
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN mkdir -p exports temp assets/bg_previews /tmp/.X11-unix
+RUN mkdir -p exports temp assets/bg_previews
 
 EXPOSE 10000
 
-# Start Xvfb Virtual Display Server in background, wait 1s, then start Web Server and Telegram Bot
-CMD ["sh", "-c", "Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset & sleep 1 && npm start"]
+CMD ["python", "bot.py"]

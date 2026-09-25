@@ -13,3 +13,6 @@ temp/*
 *.vbs
 scratch/
 .system_generated/
+backup_nodejs_bot.zip
+__pycache__/
+*.pyc

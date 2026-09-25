@@ -22,3 +22,6 @@ yarn-error.log*
 # OS Files
 .DS_Store
 Thumbs.db
+backup_nodejs_bot.zip
+__pycache__/
+*.pyc
