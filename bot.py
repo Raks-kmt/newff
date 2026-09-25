@@ -1119,4 +1119,8 @@ threading.Thread(target=start_http_server, daemon=True).start()
 
 if __name__ == '__main__':
     print(f"[BOT] Stop Challenge Python Telegram Bot is active and listening on port {PORT}!")
+    try:
+        bot.delete_webhook(drop_pending_updates=False)
+    except Exception as e:
+        print(f"[BOT] Webhook clear notice: {e}")
     bot.infinity_polling(timeout=20, long_polling_timeout=20)
