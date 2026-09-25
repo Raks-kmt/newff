@@ -74,6 +74,10 @@ class ServerRenderer {
       ? path.join(__dirname, 'temp', 'chrome_prof')
       : `/tmp/chrome_prof_${Date.now()}`;
 
+    try {
+      fs.mkdirSync(userDataDir, { recursive: true });
+    } catch (e) {}
+
     const chromeArgs = [
       '--headless=new',
       `--remote-debugging-port=${this.port}`,
@@ -83,7 +87,6 @@ class ServerRenderer {
       '--disable-dev-shm-usage',
       '--disable-gpu',
       '--no-zygote',
-      '--disable-software-rasterizer',
       '--log-level=3',
       '--no-first-run',
       '--no-default-browser-check',
@@ -109,6 +112,9 @@ class ServerRenderer {
       this.isReady = false;
       global.__rendererReady = false;
       this.ws = null;
+      if (process.platform === 'linux' && userDataDir.startsWith('/tmp/chrome_prof_')) {
+        try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch (e) {}
+      }
     });
 
     // Wait for CDP port

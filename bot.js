@@ -595,21 +595,34 @@ async function sendOrUpdateBgPreview(chatId, bgKey) {
     session.lastBgPreviewMsgId = null;
   }
 
-  if (fs.existsSync(previewFile)) {
-    const sentMsg = await bot.sendPhoto(chatId, previewFile, {
-      caption: caption,
-      parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard }
-    });
-    session.lastBgPreviewMsgId = sentMsg.message_id;
-    saveSessions();
-  } else {
-    const sentMsg = await bot.sendMessage(chatId, caption, {
-      parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard }
-    });
-    session.lastBgPreviewMsgId = sentMsg.message_id;
-    saveSessions();
+  try {
+    if (previewFile && fs.existsSync(previewFile)) {
+      const stream = fs.createReadStream(previewFile);
+      const sentMsg = await bot.sendPhoto(chatId, stream, {
+        caption: caption,
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard }
+      });
+      session.lastBgPreviewMsgId = sentMsg.message_id;
+      saveSessions();
+    } else {
+      const sentMsg = await bot.sendMessage(chatId, caption, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard }
+      });
+      session.lastBgPreviewMsgId = sentMsg.message_id;
+      saveSessions();
+    }
+  } catch (photoErr) {
+    console.error(`[BG PREVIEW ERROR] (${currentKey}):`, photoErr.message);
+    try {
+      const sentMsg = await bot.sendMessage(chatId, caption, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard }
+      });
+      session.lastBgPreviewMsgId = sentMsg.message_id;
+      saveSessions();
+    } catch (e2) {}
   }
 }
 
@@ -2531,15 +2544,40 @@ async function handleImageFile(chatId, fileId, originalName = 'ChallengeItem', u
 
       // Clean up status message
       bot.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
+
+      // AUTOMATIC CLEANUP: Video arrived on Telegram! Delete MP4 and temp files immediately from server!
+      try {
+        if (fs.existsSync(videoFilePath)) {
+          fs.unlinkSync(videoFilePath);
+          console.log(`[CLEANUP] Deleted rendered video from server: ${videoFilePath}`);
+        }
+      } catch (cleanErr) {
+        console.warn('[CLEANUP ERROR]:', cleanErr.message);
+      }
+
+      // Cleanup user temp preview files
+      const previewsToClean = [
+        path.join(TEMP_DIR, `scale_preview_${chatId}.jpg`),
+        path.join(TEMP_DIR, `scale_test_${chatId}.jpg`),
+        path.join(TEMP_DIR, `particles_preview_${chatId}.jpg`)
+      ];
+      for (const p of previewsToClean) {
+        try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch (e) {}
+      }
+
     } else {
       await bot.editMessageText(
-        caption + `\n\n⚠️ *Notice*: Video size (${(videoFileSize / (1024 * 1024)).toFixed(1)} MB) exceeds Telegram's 50MB bot upload limit. The file is saved directly on your desktop PC at:\n\`${videoFilePath}\`\n\n💡 Tip: Choose 1080p or 720p in /settings for instant Telegram delivery!`,
+        caption + `\n\n⚠️ *Notice*: Video size (${(videoFileSize / (1024 * 1024)).toFixed(1)} MB) exceeds Telegram's 50MB bot upload limit.\n\n💡 Tip: Choose 1080p or 720p in /settings for instant Telegram delivery!`,
         {
           chat_id: chatId,
           message_id: statusMsg.message_id,
           parse_mode: 'Markdown'
         }
       );
+      // Delete after 60s if not delivered
+      setTimeout(() => {
+        try { if (fs.existsSync(videoFilePath)) fs.unlinkSync(videoFilePath); } catch (e) {}
+      }, 60000);
     }
 
   } catch (err) {
@@ -2549,6 +2587,12 @@ async function handleImageFile(chatId, fileId, originalName = 'ChallengeItem', u
       message_id: statusMsg.message_id,
       parse_mode: 'Markdown'
     });
+    // Clean up on failure
+    try {
+      if (typeof videoFilePath !== 'undefined' && videoFilePath && fs.existsSync(videoFilePath)) {
+        fs.unlinkSync(videoFilePath);
+      }
+    } catch (e) {}
   }
 }
 
@@ -2627,6 +2671,7 @@ async function handleZipBatchFile(chatId, fileId, zipFileName = 'batch_images.zi
     const audioFilesInZip = allFiles.filter(f => /\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(f));
 
     // If ZIP contains audio files, auto-add them to user's Audio Pool
+    const batchAudioPaths = [];
     if (audioFilesInZip.length > 0) {
       if (!Array.isArray(session.customAudioFiles)) session.customAudioFiles = [];
       for (const aPath of audioFilesInZip) {
@@ -2634,6 +2679,7 @@ async function handleZipBatchFile(chatId, fileId, zipFileName = 'batch_images.zi
         const persistentPath = path.join(TEMP_DIR, `${chatId}_${Date.now()}_${aName}`);
         try {
           fs.copyFileSync(aPath, persistentPath);
+          batchAudioPaths.push(persistentPath);
           session.customAudioFiles.push({
             name: aName,
             path: persistentPath,
@@ -2801,12 +2847,14 @@ async function handleZipBatchFile(chatId, fileId, zipFileName = 'batch_images.zi
 
       } catch (itemErr) {
         console.error(`[ZIP BATCH ITEM ERROR] (${cleanName}):`, itemErr);
+        session.lastBatchError = itemErr?.message || String(itemErr);
         failedCount++;
       }
     }
 
     if (renderedVideos.length === 0) {
-      return bot.editMessageText(`❌ *Batch Rendering Failed*: None of the videos could be completed.`, {
+      const detail = session.lastBatchError ? `\n\n⚠️ _Details: \`${session.lastBatchError}\`_` : '';
+      return bot.editMessageText(`❌ *Batch Rendering Failed*: None of the videos could be completed.${detail}`, {
         chat_id: chatId,
         message_id: statusMsg.message_id,
         parse_mode: 'Markdown'
@@ -2887,21 +2935,59 @@ async function handleZipBatchFile(chatId, fileId, zipFileName = 'batch_images.zi
       }
 
       bot.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
+
+      // AUTOMATIC CLEANUP: ZIP has arrived on Telegram! Delete all rendered videos, ZIP archive, and temp files immediately from server!
+      try {
+        if (fs.existsSync(outZipPath)) {
+          fs.unlinkSync(outZipPath);
+          console.log(`[CLEANUP] Deleted batch ZIP from server: ${outZipPath}`);
+        }
+      } catch (cleanErr) {
+        console.warn('[CLEANUP ERROR]:', cleanErr.message);
+      }
+
+      // Delete all individual rendered MP4 videos
+      for (const v of renderedVideos) {
+        try {
+          if (v && v.path && fs.existsSync(v.path)) {
+            fs.unlinkSync(v.path);
+            console.log(`[CLEANUP] Deleted batch video: ${v.path}`);
+          }
+        } catch (e) {}
+      }
+
     } else {
       await bot.editMessageText(
-        caption + `\n\n⚠️ *Note*: ZIP size exceeds Telegram's 50MB bot upload limit. The file is saved directly on your desktop PC at the path above!`,
+        caption + `\n\n⚠️ *Note*: ZIP size exceeds Telegram's 50MB bot upload limit.\n\n💡 Tip: Choose 1080p or 720p in /settings for instant Telegram delivery!`,
         {
           chat_id: chatId,
           message_id: statusMsg.message_id,
           parse_mode: 'Markdown'
         }
       );
+      // Auto-delete after 60s if not delivered
+      setTimeout(() => {
+        try { if (fs.existsSync(outZipPath)) fs.unlinkSync(outZipPath); } catch (e) {}
+        for (const v of renderedVideos) {
+          try { if (v?.path && fs.existsSync(v.path)) fs.unlinkSync(v.path); } catch (e) {}
+        }
+      }, 60000);
     }
 
-    // Clean up temporary extracted folder
+    // Clean up temporary extracted folder & batch audio
     try {
       fs.rmSync(batchWorkDir, { recursive: true, force: true });
     } catch (e) {}
+
+    if (typeof batchAudioPaths !== 'undefined' && Array.isArray(batchAudioPaths)) {
+      for (const ap of batchAudioPaths) {
+        try { if (fs.existsSync(ap)) fs.unlinkSync(ap); } catch (e) {}
+      }
+      if (Array.isArray(session.customAudioFiles)) {
+        session.customAudioFiles = session.customAudioFiles.filter(t => !batchAudioPaths.includes(t.path));
+        saveSessions();
+      }
+    }
 
   } catch (err) {
     console.error('[ZIP BATCH FATAL ERROR]:', err);
@@ -2913,6 +2999,23 @@ async function handleZipBatchFile(chatId, fileId, zipFileName = 'batch_images.zi
     try {
       fs.rmSync(batchWorkDir, { recursive: true, force: true });
     } catch (e) {}
+    if (typeof outZipPath !== 'undefined' && outZipPath && fs.existsSync(outZipPath)) {
+      try { fs.unlinkSync(outZipPath); } catch (e) {}
+    }
+    if (typeof renderedVideos !== 'undefined' && Array.isArray(renderedVideos)) {
+      for (const v of renderedVideos) {
+        try { if (v?.path && fs.existsSync(v.path)) fs.unlinkSync(v.path); } catch (e) {}
+      }
+    }
+    if (typeof batchAudioPaths !== 'undefined' && Array.isArray(batchAudioPaths)) {
+      for (const ap of batchAudioPaths) {
+        try { if (fs.existsSync(ap)) fs.unlinkSync(ap); } catch (e) {}
+      }
+      if (Array.isArray(session.customAudioFiles)) {
+        session.customAudioFiles = session.customAudioFiles.filter(t => !batchAudioPaths.includes(t.path));
+        saveSessions();
+      }
+    }
   }
 }
 
@@ -2988,3 +3091,76 @@ bot.on('document', async (msg) => {
 });
 
 console.log('✅ Stop Challenge Telegram Bot is fully active and listening for messages!');
+
+/**
+ * AUTOMATIC SERVER CACHE CLEANUP & DISK SPACE JANITOR
+ * Automatically deletes rendered videos, ZIP archives, temp images, and extracted folders.
+ * Keeps server disk 100% clean and prevents storage exhaustion on cloud servers.
+ */
+function runPeriodicCacheCleanup() {
+  const maxAgeMs = 5 * 60 * 1000; // 5 minutes max age
+  const now = Date.now();
+
+  // 1. Clean exports directory
+  try {
+    if (fs.existsSync(EXPORTS_DIR)) {
+      const exportFiles = fs.readdirSync(EXPORTS_DIR);
+      for (const f of exportFiles) {
+        if (f === '.gitkeep') continue;
+        const fp = path.join(EXPORTS_DIR, f);
+        try {
+          const stats = fs.statSync(fp);
+          if (now - stats.mtimeMs > maxAgeMs) {
+            fs.unlinkSync(fp);
+            console.log(`[JANITOR] Cleaned old export: ${f}`);
+          }
+        } catch (e) {}
+      }
+    }
+  } catch (e) {}
+
+  // 2. Clean temp directory (preserve permanent bg_previews and .gitkeep)
+  try {
+    if (fs.existsSync(TEMP_DIR)) {
+      const tempFiles = fs.readdirSync(TEMP_DIR);
+      for (const f of tempFiles) {
+        if (f === '.gitkeep' || f === 'bg_previews' || f === 'chrome_prof') continue;
+        const fp = path.join(TEMP_DIR, f);
+        try {
+          const stats = fs.statSync(fp);
+          if (stats.isDirectory()) {
+            if (now - stats.mtimeMs > maxAgeMs) {
+              fs.rmSync(fp, { recursive: true, force: true });
+              console.log(`[JANITOR] Cleaned old temp dir: ${f}`);
+            }
+          } else if (now - stats.mtimeMs > maxAgeMs) {
+            fs.unlinkSync(fp);
+            console.log(`[JANITOR] Cleaned old temp file: ${f}`);
+          }
+        } catch (e) {}
+      }
+    }
+  } catch (e) {}
+
+  // 3. Clean temporary Chrome profile directories on Linux (/tmp/chrome_prof_*)
+  if (process.platform === 'linux') {
+    try {
+      const tmpFiles = fs.readdirSync('/tmp');
+      for (const f of tmpFiles) {
+        if (f.startsWith('chrome_prof_')) {
+          const fp = path.join('/tmp', f);
+          try {
+            const stats = fs.statSync(fp);
+            if (now - stats.mtimeMs > 15 * 60 * 1000) {
+              fs.rmSync(fp, { recursive: true, force: true });
+            }
+          } catch (e) {}
+        }
+      }
+    } catch (e) {}
+  }
+}
+
+// Run janitor every 5 minutes
+setInterval(runPeriodicCacheCleanup, 5 * 60 * 1000);
+runPeriodicCacheCleanup();
