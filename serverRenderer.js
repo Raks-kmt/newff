@@ -78,6 +78,9 @@ class ServerRenderer {
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
+      '--no-zygote',
+      '--disable-software-rasterizer',
+      '--log-level=3',
       '--no-first-run',
       '--no-default-browser-check',
       '--enable-features=WebCodecs',
@@ -90,7 +93,7 @@ class ServerRenderer {
     if (this.chromeProcess.stderr) {
       this.chromeProcess.stderr.on('data', (d) => {
         const line = d.toString().trim();
-        if (line && !line.includes('DevTools listening on')) {
+        if (line && !line.includes('DevTools listening on') && !line.includes('dbus')) {
           console.log(`[CHROME]: ${line}`);
         }
       });
@@ -107,7 +110,16 @@ class ServerRenderer {
     for (let attempt = 0; attempt < 30; attempt++) {
       await new Promise(r => setTimeout(r, 600));
       try {
-        const res = await fetch(`http://127.0.0.1:${this.port}/json`);
+        let res = null;
+        try {
+          res = await fetch(`http://127.0.0.1:${this.port}/json`);
+        } catch (e1) {
+          try {
+            res = await fetch(`http://localhost:${this.port}/json`);
+          } catch (e2) {}
+        }
+        if (!res || !res.ok) continue;
+
         const targets = await res.json();
         const workerTarget = targets.find(t => t.url && t.url.includes('render-worker.html')) ||
           targets.find(t => t.type === 'page');
