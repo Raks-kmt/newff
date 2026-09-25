@@ -109,7 +109,24 @@ def get_user_session(chat_id):
     if chat_id_str not in sessions:
         sessions[chat_id_str] = get_default_session()
         save_sessions()
-    return sessions[chat_id_str]
+    s = sessions[chat_id_str]
+    # Normalize legacy camelCase keys from sessions.json
+    if 'bgGradient' in s and 'bg_gradient' not in s: s['bg_gradient'] = s['bgGradient']
+    if 'outlineColor' in s and 'outline_color' not in s: s['outline_color'] = s['outlineColor']
+    if 'outlineWidth' in s and 'outline_width' not in s: s['outline_width'] = s['outlineWidth']
+    if 'pngScale' in s and 'png_scale' not in s: s['png_scale'] = s['pngScale']
+    if 'customAudioFiles' in s and 'custom_audio_files' not in s: s['custom_audio_files'] = s['customAudioFiles']
+    if 'customAudioFile' in s and 'custom_audio_file' not in s: s['custom_audio_file'] = s['customAudioFile']
+    if 'audioPreset' in s and 'audio_preset' not in s: s['audio_preset'] = s['audioPreset']
+    if 'headerText' in s and 'header_text' not in s: s['header_text'] = s['headerText']
+    if 'headerColor' in s and 'header_color' not in s: s['header_color'] = s['headerColor']
+    if 'subText' in s and 'sub_text' not in s: s['sub_text'] = s['subText']
+    if 'motionType' in s and 'motion_type' not in s: s['motion_type'] = s['motionType']
+    if 'showSparkles' in s and 'show_sparkles' not in s: s['show_sparkles'] = s['showSparkles']
+    if 'particleCount' in s and 'particle_count' not in s: s['particle_count'] = s['particleCount']
+    if 'particleSpeed' in s and 'particle_speed' not in s: s['particle_speed'] = s['particleSpeed']
+    if 'particleColor' in s and 'particle_color' not in s: s['particle_color'] = s['particleColor']
+    return s
 
 # -------------------------------------------------------------
 # UI LABELS & HELPERS
@@ -134,8 +151,15 @@ def get_scale_bar(percent):
     return ''.join(bar)
 
 def get_clean_header(text):
-    # Remove unsupported emojis for clean rendering on non-emoji Linux fonts
-    return text.replace('🛑', '').replace('🎯', '').replace('🔥', '').strip()
+    if not text:
+        return ""
+    clean = ""
+    for ch in text:
+        if ord(ch) < 0x2000 or ord(ch) == 0x2022:
+            clean += ch
+        else:
+            clean += " "
+    return " ".join(clean.split())
 
 # -------------------------------------------------------------
 # AUTOMATIC SERVER CLEANUP JANITOR
@@ -738,14 +762,26 @@ def handle_single_image(chat_id, file_id, original_name="ChallengeItem"):
 
         img = Image.open(temp_image_path)
 
-        # 2. Audio selection
+        # 2. Audio selection & duration auto-match
         chosen_audio = None
-        pool = session.get('custom_audio_files', [])
-        if pool and session.get('audio_preset') == 'random_pool':
+        pool = session.get('custom_audio_files') or []
+        single_custom = session.get('custom_audio_file')
+        preset = session.get('audio_preset')
+
+        if pool and (preset == 'random_pool' or not preset or preset == 'custom'):
             valid_tracks = [t['path'] for t in pool if os.path.exists(t.get('path', ''))]
             if valid_tracks:
                 import random
                 chosen_audio = random.choice(valid_tracks)
+        elif single_custom and os.path.exists(single_custom):
+            chosen_audio = single_custom
+
+        video_duration = session.get('duration', 3.0)
+        if chosen_audio and os.path.exists(chosen_audio):
+            det_dur = renderer.get_audio_duration(chosen_audio)
+            if det_dur and det_dur > 0:
+                video_duration = det_dur
+                print(f"[BOT] Video duration matched to audio track: {video_duration}s")
 
         # 3. Render 60 FPS Video
         def on_prog(pct, cur, total):
@@ -766,7 +802,7 @@ def handle_single_image(chat_id, file_id, original_name="ChallengeItem"):
             'image': img,
             'motion_type': session.get('motion_type', 'spin'),
             'speed': session.get('speed', 1.0),
-            'duration': session.get('duration', 3.0),
+            'duration': video_duration,
             'fps': session.get('fps', 60),
             'resolution': session.get('resolution', '720p'),
             'aspect_ratio': session.get('aspect_ratio', '9:16'),
@@ -873,12 +909,35 @@ def handle_batch_zip(chat_id, file_id, zip_name="batch.zip"):
         with zipfile.ZipFile(local_zip, 'r') as z:
             z.extractall(extract_dir)
 
-        # 3. Find image files
+        # 3. Find image files and audio files
         valid_exts = {'.png', '.jpg', '.jpeg', '.webp'}
-        image_files = [
+        valid_audio_exts = {'.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac'}
+
+        all_files = [
             p for p in extract_dir.rglob('*')
-            if p.is_file() and p.suffix.lower() in valid_exts and '__MACOSX' not in str(p)
+            if p.is_file() and '__MACOSX' not in str(p)
         ]
+        image_files = [p for p in all_files if p.suffix.lower() in valid_exts]
+        audio_files = [p for p in all_files if p.suffix.lower() in valid_audio_exts]
+
+        # Auto-import audio tracks if included in ZIP
+        if audio_files:
+            if 'custom_audio_files' not in session or not isinstance(session['custom_audio_files'], list):
+                session['custom_audio_files'] = []
+            import shutil
+            for a_path in audio_files:
+                dest_a = TEMP_DIR / f"{chat_id}_{int(time.time())}_{a_path.name}"
+                try:
+                    shutil.copy2(str(a_path), str(dest_a))
+                    session['custom_audio_files'].append({
+                        'name': a_path.name,
+                        'path': str(dest_a),
+                        'addedAt': int(time.time() * 1000)
+                    })
+                except Exception:
+                    pass
+            session['audio_preset'] = 'random_pool'
+            save_sessions()
 
         if not image_files:
             return bot.edit_message_text(
@@ -898,12 +957,33 @@ def handle_batch_zip(chat_id, file_id, zip_name="batch.zip"):
         for idx, img_path in enumerate(image_files):
             clean_item_name = img_path.stem
             out_mp4 = EXPORTS_DIR / f"{idx+1:02d}_{clean_item_name}_60FPS.mp4"
-            
+
+            # Select random audio from pool for each item
+            chosen_audio = None
+            pool = session.get('custom_audio_files') or []
+            single_custom = session.get('custom_audio_file')
+            preset = session.get('audio_preset')
+
+            if pool and (preset == 'random_pool' or not preset or preset == 'custom'):
+                valid_tracks = [t['path'] for t in pool if os.path.exists(t.get('path', ''))]
+                if valid_tracks:
+                    import random
+                    chosen_audio = random.choice(valid_tracks)
+            elif single_custom and os.path.exists(single_custom):
+                chosen_audio = single_custom
+
+            item_duration = session.get('duration', 3.0)
+            if chosen_audio and os.path.exists(chosen_audio):
+                det_dur = renderer.get_audio_duration(chosen_audio)
+                if det_dur and det_dur > 0:
+                    item_duration = det_dur
+
             try:
                 bot.edit_message_text(
                     f"🎬 *Rendering Video {idx+1}/{total_count}* • `{clean_item_name}`\n"
                     f"📊 Batch Progress: **{int((idx / total_count) * 100)}%**\n"
-                    f"⏱️ `60 FPS` • `{session.get('resolution', '720p').upper()}`",
+                    f"⏱️ `{item_duration}s` @ `60 FPS` • `{session.get('resolution', '720p').upper()}`\n"
+                    f"🎵 `{'Audio Track Attached' if chosen_audio else 'Silent'}`",
                     chat_id=chat_id,
                     message_id=status_msg.message_id
                 )
@@ -915,14 +995,23 @@ def handle_batch_zip(chat_id, file_id, zip_name="batch.zip"):
                     'image': str(img_path),
                     'motion_type': session.get('motion_type', 'spin'),
                     'speed': session.get('speed', 1.0),
-                    'duration': session.get('duration', 3.0),
+                    'duration': item_duration,
                     'fps': session.get('fps', 60),
                     'resolution': session.get('resolution', '720p'),
                     'aspect_ratio': session.get('aspect_ratio', '9:16'),
                     'bg_gradient': session.get('bg_gradient', 'cyberpunk'),
                     'header_text': get_clean_header(session.get('header_text', 'CAN YOU STOP THIS?')),
+                    'header_color': session.get('header_color', '#ffe600'),
                     'sub_text': get_clean_header(session.get('sub_text', 'PAUSE EXACTLY IN THE OUTLINE!')),
                     'outline_color': session.get('outline_color', '#00f3ff'),
+                    'outline_width': session.get('outline_width', 8),
+                    'outline_glow': session.get('outline_glow', 18),
+                    'image_scale': 0.72 * (session.get('png_scale', 100) / 100.0),
+                    'show_sparkles': session.get('show_sparkles', True),
+                    'particle_count': session.get('particle_count', 90),
+                    'particle_speed': session.get('particle_speed', 3.0),
+                    'particle_color': session.get('particle_color', '#00f3ff'),
+                    'audio_path': chosen_audio,
                     'output_path': str(out_mp4)
                 })
                 rendered_videos.append(out_mp4)
