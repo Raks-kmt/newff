@@ -1481,11 +1481,46 @@ if __name__ == '__main__':
         server.serve_forever()
     else:
         # POLLING MODE (Render / Local Dev)
+        # Start health server first so Render sees it as "live"
         threading.Thread(target=lambda: HTTPServer(('0.0.0.0', PORT), DualModeHandler).serve_forever(), daemon=True).start()
         print(f"[HTTP] Health Server running on 0.0.0.0:{PORT}")
-        try:
-            bot.delete_webhook(drop_pending_updates=True)
-        except Exception as e:
-            print(f"[BOT] Webhook clear notice: {e}")
-        bot.infinity_polling(timeout=20, long_polling_timeout=20)
 
+        # AGGRESSIVE 409 CONFLICT RESOLUTION:
+        # 1. Clear any existing webhook
+        # 2. Drop all pending updates (kills old getUpdates connections)
+        # 3. Wait 5 seconds for old instance to fully die on Render
+        # 4. Start polling with retry
+        print("[BOT] Clearing old connections (409 conflict prevention)...")
+        for attempt in range(3):
+            try:
+                bot.delete_webhook(drop_pending_updates=True)
+                print(f"[BOT] Webhook cleared (attempt {attempt + 1})")
+                break
+            except Exception as e:
+                print(f"[BOT] Clear attempt {attempt + 1} failed: {e}")
+                time.sleep(2)
+
+        print("[BOT] Waiting 5s for old instance to die...")
+        time.sleep(5)
+
+        # Start polling with automatic 409 recovery
+        print("[BOT] Starting long polling...")
+        while True:
+            try:
+                bot.infinity_polling(
+                    timeout=30,
+                    long_polling_timeout=30,
+                    allowed_updates=['message', 'callback_query', 'inline_query']
+                )
+            except Exception as e:
+                err_str = str(e)
+                if '409' in err_str:
+                    print(f"[BOT] 409 Conflict detected, retrying in 10s...")
+                    try:
+                        bot.delete_webhook(drop_pending_updates=True)
+                    except Exception:
+                        pass
+                    time.sleep(10)
+                else:
+                    print(f"[BOT] Polling error: {e}, retrying in 5s...")
+                    time.sleep(5)
