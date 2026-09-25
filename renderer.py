@@ -16,10 +16,25 @@ import os
 import time
 import math
 import subprocess
+import gc
 from collections import deque
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from scipy.ndimage import shift
+
+# Memory-aware rendering: detect available RAM for cloud deploy safety
+def get_available_ram_mb():
+    """Detect available system RAM in MB. Returns 512 as safe fallback."""
+    try:
+        with open('/proc/meminfo', 'r') as f:
+            for line in f:
+                if line.startswith('MemAvailable:'):
+                    return int(line.split()[1]) // 1024
+    except Exception:
+        pass
+    return 2048  # Default generous fallback for local dev
+
+MAX_SAFE_PIXELS = None  # Will be computed once at render time
 
 # -------------------------------------------------------------
 # 20 CURATED STUDIO BACKGROUND PRESETS (MATCHING CanvasEngine.js)
@@ -158,7 +173,25 @@ def get_target_dimensions(resolution='720p', aspect_ratio='9:16'):
         '1080p': {'9:16': (1080, 1920), '1:1': (1080, 1080), '16:9': (1920, 1080)},
         '720p': {'9:16': (720, 1280), '1:1': (720, 720), '16:9': (1280, 720)}
     }
-    return res_map.get(str(resolution).lower(), {}).get(aspect_ratio, (720, 1280))
+    w, h = res_map.get(str(resolution).lower(), {}).get(aspect_ratio, (720, 1280))
+    
+    # Smart RAM-aware auto-downgrade to prevent OOM crashes on cloud
+    available_ram = get_available_ram_mb()
+    # Each RGBA frame ≈ w*h*4 bytes. Need ~6 frames in memory + overhead
+    frame_mb = (w * h * 4) / (1024 * 1024)
+    estimated_need = frame_mb * 8  # bg + outline + overlay layers + working copies
+    
+    if estimated_need > available_ram * 0.6:  # Use max 60% of RAM
+        # Auto-downgrade to the highest resolution that fits
+        for fallback_res in ['1080p', '720p']:
+            fw, fh = res_map.get(fallback_res, {}).get(aspect_ratio, (720, 1280))
+            fallback_need = (fw * fh * 4 * 8) / (1024 * 1024)
+            if fallback_need < available_ram * 0.6:
+                print(f"[RENDERER] ⚠️ RAM-safe downgrade: {resolution} → {fallback_res} "
+                      f"(need {estimated_need:.0f}MB, avail {available_ram}MB)")
+                return fw, fh
+    
+    return w, h
 
 def hex_to_rgb(hex_str, default=(0, 243, 255)):
     try:
@@ -411,6 +444,10 @@ def generate_outline_and_glow(item_img, outline_color=(0, 243, 255), thickness=8
         'item_h': h
     }
 
+# Free intermediate numpy arrays after outline generation
+def _cleanup_outline_memory():
+    gc.collect()
+
 # -------------------------------------------------------------
 # 4. 3D FLOATING PARTICLES & 4-POINT DIAMOND SPARKLES
 # -------------------------------------------------------------
@@ -605,8 +642,18 @@ def render_stop_challenge_video(config, on_progress=None):
     width, height = get_target_dimensions(resolution, aspect_ratio)
     scale = width / 1080.0
 
+    # Smart FPS reduction for high resolutions to save memory & time
+    pixel_count = width * height
+    if pixel_count > 2073600 and fps > 30:  # >1080p
+        fps = 30
+        print(f"[RENDERER] FPS auto-reduced to 30 for {width}x{height} (memory safety)")
+
     # 1. Process image cutout cleanly using outer-border BFS flood fill
     processed_img = process_image_transparency(source_img)
+    # Free source image memory
+    if isinstance(image_input, str):
+        del source_img
+        gc.collect()
 
     base_dim = min(width, height) * 0.52 * (image_scale_mult / 0.72)
     aspect = processed_img.width / max(1, processed_img.height)
@@ -630,10 +677,16 @@ def render_stop_challenge_video(config, on_progress=None):
         padding=50
     )
     outline_base_img = outline_data['image']
+    _cleanup_outline_memory()  # Free numpy intermediates from outline generation
 
     # 3. Target Position
     target_x = width // 2
     target_y = int(height * 0.53)
+
+    # Reduce particles on high-res to save CPU + memory
+    if pixel_count > 2073600:  # > 1080p
+        particle_count = min(particle_count, 40)
+        outline_glow = min(outline_glow, 10)
 
     # Pre-render Studio Gradient Background with Cinematic Vignette & Grid
     bg_base = create_gradient_background(width, height, bg_gradient)

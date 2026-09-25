@@ -802,6 +802,11 @@ def handle_callbacks(call):
 
     # 7. Resolution & Duration
     if data == 'menu:resolution':
+        ram_mb = renderer.get_available_ram_mb()
+        cloud_note = ""
+        if ram_mb < 1024:
+            cloud_note = "\n\n⚠️ _Cloud server has limited RAM. 2K/4K will auto-downgrade to 1080p to prevent crashes._"
+        
         kb = types.InlineKeyboardMarkup(row_width=2)
         kb.add(
             types.InlineKeyboardButton("📱 720p (Fastest)", callback_data="set:res:720p"),
@@ -816,7 +821,9 @@ def handle_callbacks(call):
         kb.add(types.InlineKeyboardButton('« Back to Settings', callback_data='menu:main'))
         
         bot.edit_message_text(
-            f"📺 *Output Video Resolution & Aspect Ratio*:\nCurrent: *{session.get('resolution', '720p').upper()}* • *{session.get('aspect_ratio', '9:16')}*",
+            f"📺 *Output Video Resolution & Aspect Ratio*:\n"
+            f"Current: *{session.get('resolution', '720p').upper()}* • *{session.get('aspect_ratio', '9:16')}*"
+            f"{cloud_note}",
             chat_id=chat_id,
             message_id=message_id,
             reply_markup=kb
@@ -827,7 +834,10 @@ def handle_callbacks(call):
         res = data.replace('set:res:', '')
         session['resolution'] = res
         save_sessions()
-        return bot.answer_callback_query(call.id, text=f"Resolution: {res.upper()}")
+        note = ""
+        if res in ('4k', '2k') and renderer.get_available_ram_mb() < 1024:
+            note = " (will auto-fit to server RAM)"
+        return bot.answer_callback_query(call.id, text=f"Resolution: {res.upper()}{note}")
 
     if data.startswith('set:ar:'):
         ar = data.replace('set:ar:', '')
